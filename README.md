@@ -24,7 +24,7 @@ After choosing a heading and clicking the "OK" button, a random item from the li
 
 ## List Item Compatibility
 
-List items can be text, links ([[ ... ]]), or links with previews (![[ ... ]]).
+List items can be text, links ( [[ ... ]] ), or links with previews ( ![[ ... ]] ).
 
 ## Weighting Values
 
@@ -52,3 +52,6 @@ For example, the following two lists are equivalent:
 - (3) Item 2 with a probability of 3/6
 - (2) Item 3 with a probability of 2/6
 ```
+
+Specifying no weight means a weight of one.
+The probability is relative to the total weight of entries in the list.
