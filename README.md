@@ -53,5 +53,5 @@ For example, the following two lists are equivalent:
 - (2) Item 3 with a probability of 2/6
 ```
 
-Specifying no weight means a weight of one.
+Specifying no weight means a weight of one.  
 The probability is relative to the total weight of entries in the list.
