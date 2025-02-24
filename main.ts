@@ -66,7 +66,7 @@ export default class ListItemRandomPicker extends Plugin {
         await this.loadSettings();
 
         this.addRibbonIcon('list-tree', 'Pick Random Entry', (evt: MouseEvent) => {
-            this.openTitlePicker();
+            this.openTitlePicker(this.settings.notePath);
         });
 
         this.addSettingTab(new SampleSettingTab(this.app, this));
@@ -84,9 +84,9 @@ export default class ListItemRandomPicker extends Plugin {
         await this.saveData(this.settings);
     }
 
-    async openTitlePicker() {
-        const notePath = this.settings.notePath + '.md';
-        const file = this.app.vault.getAbstractFileByPath(notePath);
+    async openTitlePicker(notePath: string) {
+        const fullnotePath = notePath + '.md';
+        const file = this.app.vault.getAbstractFileByPath(fullnotePath);
 
         if (!file) {
             new Notice('Note not found!');
@@ -107,7 +107,7 @@ export default class ListItemRandomPicker extends Plugin {
         }
 
         new ItemPickerModal(this.app, titles, (title) => {
-            this.insertRandomEntry(notePath, title);
+            this.insertRandomEntry(fullnotePath, title);
         }).open();
     }
 
