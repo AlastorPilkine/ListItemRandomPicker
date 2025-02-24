@@ -69,7 +69,7 @@ export default class ListItemRandomPicker extends Plugin {
             this.openTitlePicker(this.settings.notePath);
         });
 
-        this.addSettingTab(new SampleSettingTab(this.app, this));
+        this.addSettingTab(new LIRPSettingTab(this.app, this));
     }
 
     onunload() {
@@ -198,7 +198,7 @@ export default class ListItemRandomPicker extends Plugin {
     }
 }
 
-class SampleSettingTab extends PluginSettingTab {
+class LIRPSettingTab extends PluginSettingTab {
     plugin: ListItemRandomPicker;
 
     constructor(app: App, plugin: ListItemRandomPicker) {
