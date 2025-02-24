@@ -107,7 +107,7 @@ export default class ListItemRandomPicker extends Plugin {
         }
 
         new ItemPickerModal(this.app, titles, (title) => {
-            this.insertRandomEntry(fullNotePath, title);
+            this.insertRandomEntry(content, title);
         }).open();
     }
 
@@ -121,20 +121,20 @@ export default class ListItemRandomPicker extends Plugin {
         return titles;
     }
 
-    async insertRandomEntry(notePath: string, title: string) {
-        const file = this.app.vault.getAbstractFileByPath(notePath);
+    async insertRandomEntry(content: string, title: string) {
+        // const file = this.app.vault.getAbstractFileByPath(notePath);
 
-        if (!file) {
-            new Notice('Note not found!');
-            return;
-        }
+        // if (!file) {
+        //     new Notice('Note not found!');
+        //     return;
+        // }
 
-        if (!(file instanceof TFile)) {
-            new Notice('Invalid file type. Expected a TFile.');
-            return;
-        }
+        // if (!(file instanceof TFile)) {
+        //     new Notice('Invalid file type. Expected a TFile.');
+        //     return;
+        // }
 
-        const content = await this.app.vault.read(file);
+        // const content = await this.app.vault.read(file);
         const entries = this.getEntriesFromNote(content, title);
 
         if (entries.length === 0) {
