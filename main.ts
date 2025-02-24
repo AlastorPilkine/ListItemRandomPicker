@@ -8,13 +8,13 @@ const DEFAULT_SETTINGS: MyPluginSettings = {
     notePath: 'Example Note'
 };
 
-class TitlePickerModal extends Modal {
-    titles: string[];
-    callback: (title: string) => void;
+class ItemPickerModal extends Modal {
+    items: string[];
+    callback: (item: string) => void;
 
-    constructor(app: App, titles: string[], callback: (title: string) => void) {
+    constructor(app: App, items: string[], callback: (item: string) => void) {
         super(app);
-        this.titles = titles;
+        this.items = items;
         this.callback = callback;
     }
 
@@ -34,9 +34,9 @@ class TitlePickerModal extends Modal {
         selectContainer.style.justifyContent = 'center'; // Centre verticalement le select
         selectContainer.style.alignItems = 'center'; // Centre horizontalement le select
 
-        const titleSelect = selectContainer.createEl('select');
-        this.titles.forEach(title => {
-            titleSelect.createEl('option', { value: title, text: title });
+        const itemSelect = selectContainer.createEl('select');
+        this.items.forEach(item => {
+            itemSelect.createEl('option', { value: item, text: item });
         });
 
         // Conteneur pour le bouton (en bas, centré)
@@ -47,9 +47,9 @@ class TitlePickerModal extends Modal {
 
         const okButton = buttonContainer.createEl('button', { text: 'OK' });
         okButton.addEventListener('click', () => {
-            const selectedTitle = titleSelect.value;
+            const selectedItem = itemSelect.value;
             this.close();
-            this.callback(selectedTitle);
+            this.callback(selectedItem);
         });
     }
 
@@ -59,7 +59,7 @@ class TitlePickerModal extends Modal {
     }
 }
 
-export default class listItemRandomPicker extends Plugin {
+export default class ListItemRandomPicker extends Plugin {
     settings: MyPluginSettings;
 
     async onload() {
@@ -106,7 +106,7 @@ export default class listItemRandomPicker extends Plugin {
             return;
         }
 
-        new TitlePickerModal(this.app, titles, (title) => {
+        new ItemPickerModal(this.app, titles, (title) => {
             this.insertRandomEntry(notePath, title);
         }).open();
     }
@@ -199,9 +199,9 @@ export default class listItemRandomPicker extends Plugin {
 }
 
 class SampleSettingTab extends PluginSettingTab {
-    plugin: listItemRandomPicker;
+    plugin: ListItemRandomPicker;
 
-    constructor(app: App, plugin: listItemRandomPicker) {
+    constructor(app: App, plugin: ListItemRandomPicker) {
         super(app, plugin);
         this.plugin = plugin;
     }
