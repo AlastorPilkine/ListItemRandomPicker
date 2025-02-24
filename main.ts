@@ -1,4 +1,4 @@
-import { App, Modal, Notice, Plugin, PluginSettingTab, Setting, TFile, MarkdownView } from 'obsidian';
+import { App, Modal, SuggestModal, Notice, Plugin, PluginSettingTab, Setting, TFile, MarkdownView } from 'obsidian';
 
 interface MyPluginSettings {
     notePath: string;
@@ -7,6 +7,34 @@ interface MyPluginSettings {
 const DEFAULT_SETTINGS: MyPluginSettings = {
     notePath: 'Full path of a note'
 };
+
+interface LIRPItem {
+    title: string;
+}
+
+export class MySuggestModal extends SuggestModal<LIRPItem> {
+    items: LIRPItem[];
+    callback: (value: string) => void;
+  
+    constructor(app: App, items: LIRPItem[], callback: (value: string) => void) {
+      super(app);
+      this.items = items;
+      this.callback = callback;
+    }
+
+    getSuggestions(query: string): LIRPItem[] {
+        return this.items.filter((item) =>
+          item.title.toLowerCase().includes(query.toLowerCase())
+        );
+      }
+    
+    renderSuggestion(item: LIRPItem, el: HTMLElement) {
+        el.createEl('div', { text: item.title });
+      }
+  
+      onChooseSuggestion(item: LIRPItem, evt: MouseEvent | KeyboardEvent) {
+        this.callback(item.title);
+      }}  
 
 class ItemPickerModal extends Modal {
     items: string[];
@@ -84,6 +112,12 @@ export default class ListItemRandomPicker extends Plugin {
         await this.saveData(this.settings);
     }
 
+    transformerEnSuggestions(strings: string[]): LIRPItem[] {
+        return strings.map(str => ({
+          title: str
+        }));
+      }
+      
     async openTitlePicker(notePath: string) {
         const fullNotePath = notePath + '.md';
         const file = this.app.vault.getAbstractFileByPath(fullNotePath);
@@ -105,10 +139,14 @@ export default class ListItemRandomPicker extends Plugin {
             new Notice('No titles found in the note!');
             return;
         }
-
-        new ItemPickerModal(this.app, titles, (title) => {
+        new MySuggestModal(this.app, this.transformerEnSuggestions(titles), (title) => {
             this.insertRandomEntry(content, title);
         }).open();
+        
+
+        // new ItemPickerModal(this.app, titles, (title) => {
+        //     this.insertRandomEntry(content, title);
+        // }).open();
     }
 
     getTitlesFromNote(content: string): string[] {
