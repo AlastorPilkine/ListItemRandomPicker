@@ -1,11 +1,11 @@
-import { App, Modal, Notice, Plugin, PluginSettingTab, Setting, TFile, Editor, MarkdownView } from 'obsidian';
+import { App, Modal, Notice, Plugin, PluginSettingTab, Setting, TFile, MarkdownView } from 'obsidian';
 
 interface MyPluginSettings {
     notePath: string;
 }
 
 const DEFAULT_SETTINGS: MyPluginSettings = {
-    notePath: 'Example Note'
+    notePath: 'Full path of a note'
 };
 
 class ItemPickerModal extends Modal {
