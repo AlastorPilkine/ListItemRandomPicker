@@ -122,19 +122,7 @@ export default class ListItemRandomPicker extends Plugin {
     }
 
     async insertRandomEntry(content: string, title: string) {
-        // const file = this.app.vault.getAbstractFileByPath(notePath);
 
-        // if (!file) {
-        //     new Notice('Note not found!');
-        //     return;
-        // }
-
-        // if (!(file instanceof TFile)) {
-        //     new Notice('Invalid file type. Expected a TFile.');
-        //     return;
-        // }
-
-        // const content = await this.app.vault.read(file);
         const entries = this.getEntriesFromNote(content, title);
 
         if (entries.length === 0) {
@@ -148,12 +136,14 @@ export default class ListItemRandomPicker extends Plugin {
 
         if (activeView) {
             const editor = activeView.editor;
-            const position = editor.getCursor();
-            editor.replaceRange(randomEntry, position, position);
+            const selection = editor.getSelection();
+            editor.replaceSelection(randomEntry);
+            // const position = editor.getCursor();
+            // editor.replaceRange(randomEntry, position); //, position);
 
-            // Déplacer le curseur à la fin de l'insertion
-            const newPosition = { line: position.line, ch: position.ch + randomEntry.length };
-            editor.setCursor(newPosition);
+            // // Déplacer le curseur à la fin de l'insertion
+            // const newPosition = { line: position.line, ch: position.ch + randomEntry.length };
+            // editor.setCursor(newPosition);
         } else {
             new Notice("No active Markdown editor found.");
         }
