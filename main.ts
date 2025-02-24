@@ -172,8 +172,8 @@ export default class ListItemRandomPicker extends Plugin {
         const listContent = content.substring(startIndex, endIndex);
         while ((currentEntry = listItemRegex.exec(listContent)) !== null) {
             let fullString = currentEntry[2];
-            const ItemWithNumberRegEx = /^\((\d+)\)\s+(.+)$/m;
-            if ((currentEntrySplit = ItemWithNumberRegEx.exec(fullString)) !== null) {
+            const itemWithNumberRegEx = /^\((\d+)\)\s+(.+)$/m;
+            if ((currentEntrySplit = itemWithNumberRegEx.exec(fullString)) !== null) {
                 repeat = Number(currentEntrySplit[1]);
                 itemString = currentEntrySplit[2];
             } else {
