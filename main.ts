@@ -85,8 +85,8 @@ export default class ListItemRandomPicker extends Plugin {
     }
 
     async openTitlePicker(notePath: string) {
-        const fullnotePath = notePath + '.md';
-        const file = this.app.vault.getAbstractFileByPath(fullnotePath);
+        const fullNotePath = notePath + '.md';
+        const file = this.app.vault.getAbstractFileByPath(fullNotePath);
 
         if (!file) {
             new Notice('Note not found!');
@@ -107,7 +107,7 @@ export default class ListItemRandomPicker extends Plugin {
         }
 
         new ItemPickerModal(this.app, titles, (title) => {
-            this.insertRandomEntry(fullnotePath, title);
+            this.insertRandomEntry(fullNotePath, title);
         }).open();
     }
 
