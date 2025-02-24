@@ -65,7 +65,7 @@ export default class ListItemRandomPicker extends Plugin {
     async onload() {
         await this.loadSettings();
 
-        this.addRibbonIcon('list-tree', 'Pick Random Entry', (evt: MouseEvent) => {
+        this.addRibbonIcon('list-tree', 'Pick random list item', (evt: MouseEvent) => {
             this.openTitlePicker(this.settings.notePath);
         });
 
@@ -201,11 +201,11 @@ class LIRPSettingTab extends PluginSettingTab {
 
         containerEl.empty();
 
-        containerEl.createEl('h2', { text: 'Settings for List Item Random Picker.' });
+        // containerEl.createEl('h2', { text: 'Settings for List Item Random Picker.' });
 
         new Setting(containerEl)
             .setName('Note Path')
-            .setDesc('Path to the note containing the entries.')
+            .setDesc('Path to the note containing the lists.')
             .addText(text => text
                 .setPlaceholder('Enter the path to your note')
                 .setValue(this.plugin.settings.notePath)
