@@ -37,7 +37,7 @@ interface LIRPNoteInterface {
     list: LIRPList[];
     loadFromNote(noteFullPath: string): boolean;
     getListSuggestion(): LIRPSuggestionInterface[];
-    pickRandomItemFromListlist(listTitle: string): string; 
+    pickRandomItemFromList(listTitle: string): string; 
 }
 
 class LIRPNote implements LIRPNoteInterface {
@@ -64,7 +64,7 @@ class LIRPNote implements LIRPNoteInterface {
         return array;
     }
 
-    pickRandomItemFromListlist(listTitle: string): string {
+    pickRandomItemFromList(listTitle: string): string {
         return "toto"
     } 
 
