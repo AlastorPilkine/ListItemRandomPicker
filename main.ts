@@ -1,38 +1,101 @@
 import { App, Modal, SuggestModal, Notice, Plugin, PluginSettingTab, Setting, TFile, MarkdownView } from 'obsidian';
 
-interface MyPluginSettings {
+interface LIRPPluginSettings {
     notePath: string;
 }
 
-const DEFAULT_SETTINGS: MyPluginSettings = {
+const DEFAULT_SETTINGS: LIRPPluginSettings = {
     notePath: 'Full path of a note'
 };
 
-interface LIRPItem {
+interface LIRPListInterface {
     title: string;
+    description: string;
+    hidden: boolean;
+    items: string[];
+    pickRandomItem(): string;
 }
 
-export class MySuggestModal extends SuggestModal<LIRPItem> {
-    items: LIRPItem[];
+class LIRPList implements LIRPListInterface {
+    title: string;
+    description: string;
+    hidden: boolean;
+    items: string[];
+
+    constructor(multiLineString: string) {
+        // Work to do
+    }
+
+    pickRandomItem(): string {
+        return "toto"
+    }
+
+}
+interface LIRPNoteInterface {
+    fullPath: string;
+    description: string;
+    list: LIRPList[];
+    loadFromNote(noteFullPath: string): boolean;
+    getListSuggestion(): LIRPSuggestionInterface[];
+    pickRandomItemFromListlist(listTitle: string): string; 
+}
+
+class LIRPNote implements LIRPNoteInterface {
+    fullPath: string;
+    description: string;
+    list: LIRPList[];
+
+    constructor () {
+        this.fullPath = "";
+        this.description = "";
+        this.list = [];
+    }
+
+    loadFromNote(noteFullPath: string): boolean {
+        return true
+    }
+
+    getListSuggestion(): LIRPSuggestionInterface[] {
+        const exemple = {
+            title: "toto",
+            description: ""
+        };
+        const array = [exemple];
+        return array;
+    }
+
+    pickRandomItemFromListlist(listTitle: string): string {
+        return "toto"
+    } 
+
+}
+interface LIRPSuggestionInterface {
+    title: string;
+    description: string;
+}
+
+
+export class MySuggestModal extends SuggestModal<LIRPSuggestionInterface> {
+    items: LIRPSuggestionInterface[];
     callback: (value: string) => void;
   
-    constructor(app: App, items: LIRPItem[], callback: (value: string) => void) {
+    constructor(app: App, items: LIRPSuggestionInterface[], callback: (value: string) => void) {
       super(app);
       this.items = items;
       this.callback = callback;
     }
 
-    getSuggestions(query: string): LIRPItem[] {
+    getSuggestions(query: string): LIRPSuggestionInterface[] {
         return this.items.filter((item) =>
           item.title.toLowerCase().includes(query.toLowerCase())
         );
       }
     
-    renderSuggestion(item: LIRPItem, el: HTMLElement) {
+    renderSuggestion(item: LIRPSuggestionInterface, el: HTMLElement) {
         el.createEl('div', { text: item.title });
       }
   
-      onChooseSuggestion(item: LIRPItem, evt: MouseEvent | KeyboardEvent) {
+      onChooseSuggestion(item: LIRPSuggestionInterface, evt: MouseEvent | KeyboardEvent) {
         this.callback(item.title);
       }}  
 
@@ -88,7 +151,7 @@ class ItemPickerModal extends Modal {
 }
 
 export default class ListItemRandomPicker extends Plugin {
-    settings: MyPluginSettings;
+    settings: LIRPPluginSettings;
 
     async onload() {
         await this.loadSettings();
@@ -112,9 +175,10 @@ export default class ListItemRandomPicker extends Plugin {
         await this.saveData(this.settings);
     }
 
-    transformerEnSuggestions(strings: string[]): LIRPItem[] {
+    transformerEnSuggestions(strings: string[]): LIRPSuggestionInterface[] {
         return strings.map(str => ({
-          title: str
+          title: str,
+          description: ""
         }));
       }
       
