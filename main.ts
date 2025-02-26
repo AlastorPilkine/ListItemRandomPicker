@@ -143,12 +143,9 @@ class LIRPNote implements LIRPNoteInterface {
     }
 
     getListSuggestion(): LIRPSuggestionInterface[] {
-
         let listSuggestion: LIRPSuggestionInterface[];
         listSuggestion = [];
-        console.log('working');
         this.list.forEach((element) => {
-            console.log(element);
             // to do hidden list
             listSuggestion.push({
                 title: element.title,
@@ -222,17 +219,14 @@ export default class ListItemRandomPicker extends Plugin {
 
     }
 
-    doTheJob(fullNotePath: string): void {
+    async doTheJob(fullNotePath: string): Promise<void> {
         const currentLIRP = new LIRPNote(this.app);
 
-        const loadSuccess = currentLIRP.loadFromNote(fullNotePath);
+        const loadSuccess = await currentLIRP.loadFromNote(fullNotePath);
         if (!loadSuccess) {
             currentLIRP.error.forEach((element) => new Notice(element));
             return
         }
-        console.log(currentLIRP);
-        new Notice("No error on load");
-        console.log(currentLIRP.getListSuggestion())
         new LIRPSuggestModal(this.app, currentLIRP.getListSuggestion(), (title) => {
             this.insertString(currentLIRP.pickRandomItemFromList(title));
         }).open();
