@@ -55,7 +55,7 @@ class LIRPList implements LIRPListInterface {
         });
         if (listBeginIndexes[0] !== 0) {
             // there is a description
-            this.description = cleanLines.slice(0, listBeginIndexes[0] -1).join('\n');
+            this.description = cleanLines.slice(0, 1).join('\n');
         } else {
             this.description = "";
         }
@@ -80,12 +80,11 @@ class LIRPList implements LIRPListInterface {
 interface LIRPNoteInterface {
     fullPath: string;
     description: string;
-    list: LIRPList[];
-    error: string[];
-    warning: string[];
-    loadFromNote(noteFullPath: string): Promise<boolean>;
+    loadFromNote(noteContent: string): boolean;
     getListSuggestion(): LIRPSuggestionInterface[];
     pickRandomItemFromList(listTitle: string): string; 
+    getError(): string[];
+    getWarning(): string[];
 }
 
 class LIRPNote implements LIRPNoteInterface {
@@ -94,34 +93,17 @@ class LIRPNote implements LIRPNoteInterface {
     list: LIRPList[];
     error: string[];
     warning: string[];
-    app: App;
 
-    constructor (app: App) {
+    constructor () {
         this.fullPath = "";
         this.description = "";
         this.list = [];
         this.error = [];
         this.warning = [];
-        this.app = app;
     }
 
-    async loadFromNote(noteFullPath: string): Promise<boolean> {
-        this.fullPath = noteFullPath;
-        const file = this.app.vault.getAbstractFileByPath(noteFullPath);
-
-        if (!file) {
-            this.error.push('Note not found!');
-            return false;
-        }
-
-        if (!(file instanceof TFile)) {
-            this.error.push('Invalid file type. Expected a Markdown note file.');
-            return false;
-        }
-
-        const content = await this.app.vault.cachedRead(file);
-
-        const lines = content.split('\n');
+    loadFromNote(noteContent: string): boolean {
+        const lines = noteContent.split('\n');
         const headingRegex = /^# .+$/;
         let headingIndexes = findIndexes(lines, (element) => headingRegex.test(element));
         if (headingIndexes.length === 0) {
@@ -163,6 +145,14 @@ class LIRPNote implements LIRPNoteInterface {
             return ""
         }
     } 
+
+    getError(): string[] {
+        return []
+    };
+
+    getWarning(): string[] {
+        return []
+    };
 
 }
 interface LIRPSuggestionInterface {
@@ -222,9 +212,22 @@ export default class ListItemRandomPicker extends Plugin {
     }
 
     async doTheJob(fullNotePath: string): Promise<void> {
-        const currentLIRP = new LIRPNote(this.app);
+        const file = this.app.vault.getAbstractFileByPath(fullNotePath);
 
-        const loadSuccess = await currentLIRP.loadFromNote(fullNotePath);
+        if (!file) {
+            new Notice('Note not found!');
+            return;
+        }
+
+        if (!(file instanceof TFile)) {
+            new Notice('Invalid file type. Expected a Markdown note file.');
+            return;
+        }
+
+        const content = await this.app.vault.cachedRead(file);
+        const currentLIRP = new LIRPNote();
+
+        const loadSuccess = currentLIRP.loadFromNote(content);
         if (!loadSuccess) {
             currentLIRP.error.forEach((element) => new Notice(element));
             return
