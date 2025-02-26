@@ -1,5 +1,14 @@
 import { App, Modal, SuggestModal, Notice, Plugin, PluginSettingTab, Setting, TFile, MarkdownView } from 'obsidian';
 
+function findIndexes<T>(anArray: T[], predicate: (element: T, index: number) => boolean): number[] {
+    const indexes: number[] = [];
+    anArray.forEach((element, index) => {
+      if (predicate(element, index)) {
+        indexes.push(index);
+      }
+    });
+    return indexes;
+  }
 interface LIRPPluginSettings {
     notePath: string;
 }
@@ -12,7 +21,9 @@ interface LIRPListInterface {
     title: string;
     description: string;
     hidden: boolean;
+    macro: boolean;
     items: string[];
+    warning: string[];
     pickRandomItem(): string;
 }
 
@@ -20,14 +31,49 @@ class LIRPList implements LIRPListInterface {
     title: string;
     description: string;
     hidden: boolean;
+    macro: boolean;
     items: string[];
+    warning: string[]
 
-    constructor(multiLineString: string) {
-        // Work to do
+    constructor(lines: string[]) {
+        this.items = [];
+        this.warning = [];
+        
+        const headingRegEx = /^# +(.+)$/;
+        // to do hidden list
+        this.title = lines[0].replace(headingRegEx, "$1");
+        lines.splice(0, 1);
+        const listBeginItemRegex = /^(-|\d+\.) +(.+)$/;
+        const listBeginIndexes = findIndexes(lines, (element) => listBeginItemRegex.test(element));
+        if (listBeginIndexes.length === 0) {
+            this.warning.push('No list items in note');
+            // to do : Macro !
+            return;
+        }
+        const cleanLines = lines.map((element) => {
+            return element.replace(listBeginItemRegex, "$2")
+        });
+        if (listBeginIndexes[0] !== 0) {
+            // there is a description
+            this.description = cleanLines.slice(0, listBeginIndexes[0] -1).join('\n');
+        } else {
+            this.description = "";
+        }
+
+        const listBeginCount = listBeginIndexes.length
+        for (let currentIndex = 0; currentIndex < (listBeginCount - 1); currentIndex++) {
+            // to do item weight
+            this.items.push((cleanLines.slice(listBeginIndexes[currentIndex], listBeginIndexes[currentIndex + 1]).join('\n')));
+        }
+        this.items.push((cleanLines.slice(listBeginIndexes[listBeginCount - 1]).join('\n')));
     }
 
     pickRandomItem(): string {
-        return "toto"
+        if (this.items.length > 0) {
+            return this.items[Math.floor(Math.random() * this.items.length)]; //.replace(/\n/g, '')
+        } else {
+            return "";
+        }
     }
 
 }
@@ -35,7 +81,9 @@ interface LIRPNoteInterface {
     fullPath: string;
     description: string;
     list: LIRPList[];
-    loadFromNote(noteFullPath: string): boolean;
+    error: string[];
+    warning: string[];
+    loadFromNote(noteFullPath: string): Promise<boolean>;
     getListSuggestion(): LIRPSuggestionInterface[];
     pickRandomItemFromList(listTitle: string): string; 
 }
@@ -44,28 +92,79 @@ class LIRPNote implements LIRPNoteInterface {
     fullPath: string;
     description: string;
     list: LIRPList[];
+    error: string[];
+    warning: string[];
+    app: App;
 
-    constructor () {
+    constructor (app: App) {
         this.fullPath = "";
         this.description = "";
         this.list = [];
+        this.error = [];
+        this.warning = [];
+        this.app = app;
     }
 
-    loadFromNote(noteFullPath: string): boolean {
+    async loadFromNote(noteFullPath: string): Promise<boolean> {
+        this.fullPath = noteFullPath;
+        const file = this.app.vault.getAbstractFileByPath(noteFullPath);
+
+        if (!file) {
+            this.error.push('Note not found!');
+            return false;
+        }
+
+        if (!(file instanceof TFile)) {
+            this.error.push('Invalid file type. Expected a Markdown note file.');
+            return false;
+        }
+
+        const content = await this.app.vault.cachedRead(file);
+
+        const lines = content.split('\n');
+        const headingRegex = /^# .+$/;
+        let headingIndexes = findIndexes(lines, (element) => headingRegex.test(element));
+        if (headingIndexes.length === 0) {
+            this.error.push('No heading in note');
+            return false;
+        }
+        let headingBegin = 0;
+        if (headingIndexes[0] !== 0) {
+            // there is a description
+            this.description = lines.slice(0, headingIndexes[0] -1).join('\n');
+            headingBegin = headingIndexes[0];
+        }
+        const headingCount = headingIndexes.length
+        for (let currentIndex = headingBegin; currentIndex < (headingCount - 1); currentIndex++) {
+            this.list.push(new LIRPList(lines.slice(headingIndexes[currentIndex], headingIndexes[currentIndex + 1])));
+        }
+        this.list.push(new LIRPList(lines.slice(headingIndexes[headingCount - 1])));
         return true
     }
 
     getListSuggestion(): LIRPSuggestionInterface[] {
-        const exemple = {
-            title: "toto",
-            description: ""
-        };
-        const array = [exemple];
-        return array;
+
+        let listSuggestion: LIRPSuggestionInterface[];
+        listSuggestion = [];
+        console.log('working');
+        this.list.forEach((element) => {
+            console.log(element);
+            // to do hidden list
+            listSuggestion.push({
+                title: element.title,
+                description: element.description,
+            })
+        });
+        return listSuggestion;
     }
 
     pickRandomItemFromList(listTitle: string): string {
-        return "toto"
+        const currentList = this.list.find((element) => element.title === listTitle);
+        if (currentList !== undefined) {
+            return currentList.pickRandomItem();
+        } else {
+            return ""
+        }
     } 
 
 }
@@ -75,7 +174,7 @@ interface LIRPSuggestionInterface {
 }
 
 
-export class MySuggestModal extends SuggestModal<LIRPSuggestionInterface> {
+export class LIRPSuggestModal extends SuggestModal<LIRPSuggestionInterface> {
     items: LIRPSuggestionInterface[];
     callback: (value: string) => void;
   
@@ -86,69 +185,17 @@ export class MySuggestModal extends SuggestModal<LIRPSuggestionInterface> {
     }
 
     getSuggestions(query: string): LIRPSuggestionInterface[] {
-        return this.items.filter((item) =>
-          item.title.toLowerCase().includes(query.toLowerCase())
-        );
+        return this.items;
       }
     
     renderSuggestion(item: LIRPSuggestionInterface, el: HTMLElement) {
         el.createEl('div', { text: item.title });
+        el.createEl('small', {text: item.description});
       }
   
       onChooseSuggestion(item: LIRPSuggestionInterface, evt: MouseEvent | KeyboardEvent) {
         this.callback(item.title);
-      }}  
-
-class ItemPickerModal extends Modal {
-    items: string[];
-    callback: (item: string) => void;
-
-    constructor(app: App, items: string[], callback: (item: string) => void) {
-        super(app);
-        this.items = items;
-        this.callback = callback;
-    }
-
-    onOpen() {
-        const { contentEl } = this;
-
-        // Configuration du conteneur Flexbox
-        contentEl.style.display = 'flex';
-        contentEl.style.flexDirection = 'column';
-        contentEl.style.height = '100%'; // Assurez-vous que le conteneur prend toute la hauteur
-
-        // Conteneur pour le sélecteur (prendra l'espace restant)
-        const selectContainer = contentEl.createDiv();
-        selectContainer.style.flexGrow = '1'; // Prend l'espace disponible
-        selectContainer.style.display = 'flex';
-        selectContainer.style.flexDirection = 'column';
-        selectContainer.style.justifyContent = 'center'; // Centre verticalement le select
-        selectContainer.style.alignItems = 'center'; // Centre horizontalement le select
-
-        const itemSelect = selectContainer.createEl('select');
-        this.items.forEach(item => {
-            itemSelect.createEl('option', { value: item, text: item });
-        });
-
-        // Conteneur pour le bouton (en bas, centré)
-        const buttonContainer = contentEl.createDiv();
-        buttonContainer.style.display = 'flex';
-        buttonContainer.style.justifyContent = 'center'; // Centre horizontalement le bouton
-        buttonContainer.style.padding = '10px 0'; // Ajoute un peu d'espace autour du bouton
-
-        const okButton = buttonContainer.createEl('button', { text: 'OK' });
-        okButton.addEventListener('click', () => {
-            const selectedItem = itemSelect.value;
-            this.close();
-            this.callback(selectedItem);
-        });
-    }
-
-    onClose() {
-        const { contentEl } = this;
-        contentEl.empty();
-    }
-}
+      }}
 
 export default class ListItemRandomPicker extends Plugin {
     settings: LIRPPluginSettings;
@@ -160,12 +207,55 @@ export default class ListItemRandomPicker extends Plugin {
             this.openTitlePicker(this.settings.notePath);
         });
 
+        this.addCommand({
+            id: 'insert-random-item',
+            name: 'Insert random item from list',
+            callback: () => {
+                this.doTheJob(this.settings.notePath + '.md');
+            }
+        });
+
         this.addSettingTab(new LIRPSettingTab(this.app, this));
     }
 
     onunload() {
 
     }
+
+    doTheJob(fullNotePath: string): void {
+        const currentLIRP = new LIRPNote(this.app);
+
+        const loadSuccess = currentLIRP.loadFromNote(fullNotePath);
+        if (!loadSuccess) {
+            currentLIRP.error.forEach((element) => new Notice(element));
+            return
+        }
+        console.log(currentLIRP);
+        new Notice("No error on load");
+        console.log(currentLIRP.getListSuggestion())
+        new LIRPSuggestModal(this.app, currentLIRP.getListSuggestion(), (title) => {
+            this.insertString(currentLIRP.pickRandomItemFromList(title));
+        }).open();
+    }
+
+    insertString(currentString: string): void {
+        const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
+
+        if (activeView) {
+            const editor = activeView.editor;
+            const selection = editor.getSelection();
+            editor.replaceSelection(currentString);
+            // const position = editor.getCursor();
+            // editor.replaceRange(randomEntry, position); //, position);
+
+            // // Déplacer le curseur à la fin de l'insertion
+            // const newPosition = { line: position.line, ch: position.ch + randomEntry.length };
+            // editor.setCursor(newPosition);
+        } else {
+            new Notice("No active Markdown editor found.");
+        }
+
+    };
 
     async loadSettings() {
         this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
@@ -203,14 +293,9 @@ export default class ListItemRandomPicker extends Plugin {
             new Notice('No titles found in the note!');
             return;
         }
-        new MySuggestModal(this.app, this.transformerEnSuggestions(titles), (title) => {
+        new LIRPSuggestModal(this.app, this.transformerEnSuggestions(titles), (title) => {
             this.insertRandomEntry(content, title);
         }).open();
-        
-
-        // new ItemPickerModal(this.app, titles, (title) => {
-        //     this.insertRandomEntry(content, title);
-        // }).open();
     }
 
     getTitlesFromNote(content: string): string[] {
