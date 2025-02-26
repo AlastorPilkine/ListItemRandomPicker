@@ -182,7 +182,9 @@ export class LIRPSuggestModal extends SuggestModal<LIRPSuggestionInterface> {
     }
 
     getSuggestions(query: string): LIRPSuggestionInterface[] {
-        return this.items;
+        return this.items.filter((item) =>
+            item.title.toLowerCase().includes(query.toLowerCase())
+        );
       }
     
     renderSuggestion(item: LIRPSuggestionInterface, el: HTMLElement) {
