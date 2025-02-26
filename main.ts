@@ -201,7 +201,7 @@ export default class ListItemRandomPicker extends Plugin {
         await this.loadSettings();
 
         this.addRibbonIcon('list-tree', 'Pick random list item', (evt: MouseEvent) => {
-            this.openTitlePicker(this.settings.notePath);
+            this.doTheJob(this.settings.notePath + '.md');
         });
 
         this.addCommand({
@@ -239,12 +239,6 @@ export default class ListItemRandomPicker extends Plugin {
             const editor = activeView.editor;
             const selection = editor.getSelection();
             editor.replaceSelection(currentString);
-            // const position = editor.getCursor();
-            // editor.replaceRange(randomEntry, position); //, position);
-
-            // // Déplacer le curseur à la fin de l'insertion
-            // const newPosition = { line: position.line, ch: position.ch + randomEntry.length };
-            // editor.setCursor(newPosition);
         } else {
             new Notice("No active Markdown editor found.");
         }
@@ -257,115 +251,6 @@ export default class ListItemRandomPicker extends Plugin {
 
     async saveSettings() {
         await this.saveData(this.settings);
-    }
-
-    transformerEnSuggestions(strings: string[]): LIRPSuggestionInterface[] {
-        return strings.map(str => ({
-          title: str,
-          description: ""
-        }));
-      }
-      
-    async openTitlePicker(notePath: string) {
-        const fullNotePath = notePath + '.md';
-        const file = this.app.vault.getAbstractFileByPath(fullNotePath);
-
-        if (!file) {
-            new Notice('Note not found!');
-            return;
-        }
-
-        if (!(file instanceof TFile)) {
-            new Notice('Invalid file type. Expected a TFile.');
-            return;
-        }
-
-        const content = await this.app.vault.read(file);
-        const titles = this.getTitlesFromNote(content);
-
-        if (titles.length === 0) {
-            new Notice('No titles found in the note!');
-            return;
-        }
-        new LIRPSuggestModal(this.app, this.transformerEnSuggestions(titles), (title) => {
-            this.insertRandomEntry(content, title);
-        }).open();
-    }
-
-    getTitlesFromNote(content: string): string[] {
-        const titleRegex = /^#+\s+(.+)$/gm;
-        const titles: string[] = [];
-        let match;
-        while ((match = titleRegex.exec(content)) !== null) {
-            titles.push(match[1]);
-        }
-        return titles;
-    }
-
-    async insertRandomEntry(content: string, title: string) {
-
-        const entries = this.getEntriesFromNote(content, title);
-
-        if (entries.length === 0) {
-            new Notice('No entries found for this title!');
-            return;
-        }
-        const randomEntry = entries[Math.floor(Math.random() * entries.length)].replace(/\n/g, '');
-        // const randomEntry = entries[Math.floor(Math.random() * entries.length)].trim();
-
-        const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
-
-        if (activeView) {
-            const editor = activeView.editor;
-            const selection = editor.getSelection();
-            editor.replaceSelection(randomEntry);
-            // const position = editor.getCursor();
-            // editor.replaceRange(randomEntry, position); //, position);
-
-            // // Déplacer le curseur à la fin de l'insertion
-            // const newPosition = { line: position.line, ch: position.ch + randomEntry.length };
-            // editor.setCursor(newPosition);
-        } else {
-            new Notice("No active Markdown editor found.");
-        }
-    }
-
-    getEntriesFromNote(content: string, title: string): string[] {
-        const titleRegex = new RegExp(`^#+\\s+${title}$`, 'm');
-        const titleMatch = titleRegex.exec(content);
-
-        if (!titleMatch) {
-            return [];
-        }
-
-        const startIndex = titleMatch.index + titleMatch[0].length;
-        let endIndex = content.indexOf('\n#', startIndex);
-        if (endIndex === -1) {
-            endIndex = content.length;
-        }
-
-        const listItemRegex = /^(-|\d+\.) +(.+)$/gm;
-        const entries: string[] = [];
-        let currentEntry;
-        let currentEntrySplit;
-        let repeat: number;
-        let itemString: string;
-        const listContent = content.substring(startIndex, endIndex);
-        while ((currentEntry = listItemRegex.exec(listContent)) !== null) {
-            let fullString = currentEntry[2];
-            const itemWithNumberRegEx = /^\((\d+)\)\s+(.+)$/m;
-            if ((currentEntrySplit = itemWithNumberRegEx.exec(fullString)) !== null) {
-                repeat = Number(currentEntrySplit[1]);
-                itemString = currentEntrySplit[2];
-            } else {
-                repeat = 1;
-                itemString = fullString;
-            }
-            for (let i = 0; i < repeat; i++) {
-                entries.push(itemString);
-            }
-        }
-        return entries;
     }
 }
 
