@@ -1,3 +1,4 @@
+import { it } from 'node:test';
 import { App, SuggestModal, Notice, Plugin, PluginSettingTab, Setting, TFile, MarkdownView } from 'obsidian';
 
 function findIndexes<T>(anArray: T[], predicate: (element: T, index: number) => boolean): number[] {
@@ -8,15 +9,21 @@ function findIndexes<T>(anArray: T[], predicate: (element: T, index: number) => 
       }
     });
     return indexes;
-  }
+}
+
+function escapeRegex(stringToEscape: string): string {
+    return stringToEscape.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
 interface LIRPPluginSettings {
     notePath: string;
     showWarning: boolean;
+    maxMacroDepth: number;
 }
 
 const DEFAULT_SETTINGS: LIRPPluginSettings = {
     notePath: 'Full path of a note',
     showWarning: true,
+    maxMacroDepth: 1,
 };
 
 interface LIRPListInterface {
@@ -197,17 +204,16 @@ class LIRPNote implements LIRPNoteInterface {
         return noteSuggestion;
     }
 
-    execMacroSubstitution(item: string, macroRecursion: number = 1): string {
-        const currentMacroRecusion = macroRecursion -1;
+    execMacroSubstitution(item: string, macroRecursion: number): string {
         let modifiedItem: string = item;
         this.list.forEach((element) => {
-            const stringTitleRegex  = `\{(${element.title})\}`;
+            const stringTitleRegex  = `\{(${escapeRegex(element.title)})\}`;
             const titleRegex = new RegExp(stringTitleRegex, 'm');
             while (titleRegex.test(modifiedItem)) {
                 const execTitleRegex = titleRegex.exec(modifiedItem);
                 if (execTitleRegex !== null) {
                     const listTitle = execTitleRegex[1]
-                    modifiedItem = modifiedItem.replace(titleRegex, this.pickRandomItemFromList(listTitle, currentMacroRecusion));
+                    modifiedItem = modifiedItem.replace(titleRegex, this.pickRandomItemFromList(listTitle, macroRecursion - 1));
                 }
             }
         });
@@ -215,15 +221,20 @@ class LIRPNote implements LIRPNoteInterface {
     }
 
 
-    pickRandomItemFromList(listTitle: string, macroRecursion: number = 1): string {
+    pickRandomItemFromList(listTitle: string, macroRecursion: number): string {
         let randomItem: string = "";
         const currentList = this.list.find((element) => element.title === listTitle);
         if (currentList !== undefined) {
             randomItem = currentList.pickRandomItem();
             for (let repeat = 0; repeat < macroRecursion; repeat++) {
-                randomItem = this.execMacroSubstitution(randomItem);
+                randomItem = this.execMacroSubstitution(randomItem, macroRecursion);
             }
         }
+        const stringMacroRefRegex: string = `\{(${this.list.map((element) => element.title).join('|')})\}`;
+        const macroRefRegex = new RegExp (stringMacroRefRegex);
+        if (macroRefRegex.test(randomItem) && macroRecursion == 0) {
+            new Notice(`Macro depth limit reached in note "${this.noteName}" after calling   "${listTitle}"`);
+        };
         return randomItem;
     } 
 
@@ -330,17 +341,17 @@ export default class ListItemRandomPicker extends Plugin {
             });
         };
         new LIRPSuggestModal(this.app, currentLIRP.getNoteSuggestion(), (title) => {
-            this.insertString(currentLIRP.pickRandomItemFromList(title));
+            this.insertString(currentLIRP.pickRandomItemFromList(title, this.settings.maxMacroDepth));
         }).open();
     }
 
-    insertString(currentString: string): void {
+    insertString(stringToInsert: string): void {
         const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
 
         if (activeView) {
             const editor = activeView.editor;
             const selection = editor.getSelection();
-            editor.replaceSelection(currentString);
+            editor.replaceSelection(stringToInsert);
         } else {
             new Notice("No active Markdown editor found.");
         }
@@ -390,5 +401,20 @@ class LIRPSettingTab extends PluginSettingTab {
                 await this.plugin.saveSettings();
             })
         });
+
+
+        new Setting(containerEl)
+              .setName("Macro depth limit")
+              .setDesc("Macro recursion limit: how many nested macro calls are allowed")
+              .addSlider((slider) =>
+                slider
+                  .setValue(this.plugin.settings.maxMacroDepth - 1)
+                  .setLimits(0, 4, 1)
+                  .setDynamicTooltip()
+                  .onChange(async (value) => {
+                    this.plugin.settings.maxMacroDepth = value + 1;
+                    await this.plugin.saveSettings();
+                  })
+              );
     }
 }
