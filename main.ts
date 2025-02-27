@@ -166,14 +166,15 @@ class LIRPNote implements LIRPNoteInterface {
             this.error.push(`No heading in note`);
             return false;
         }
-        let headingBegin = 0;
         if (headingIndexes[0] !== 0) {
-            // there is a description
-            this.description = lines.slice(0, headingIndexes[0] -1).join('\n');
-            headingBegin = headingIndexes[0];
+            // taking care of MD022
+            //   MD022/blanks-around-headings: Headings should be surrounded by blank lines
+            // Due to split on '\n', the slice, and at least a join on '\n' the last '\n' is always lost !
+            this.description = lines.slice(0, headingIndexes[0]).join('\n');
         }
+        headingIndexes = findIndexes(lines, (element) => headingRegex.test(element));
         const headingCount = headingIndexes.length
-        for (let currentIndex = headingBegin; currentIndex < (headingCount - 1); currentIndex++) {
+        for (let currentIndex = headingIndexes[0]; currentIndex < (headingCount - 1); currentIndex++) {
             this.list.push(new LIRPList(lines.slice(headingIndexes[currentIndex], headingIndexes[currentIndex + 1])));
         }
         this.list.push(new LIRPList(lines.slice(headingIndexes[headingCount - 1])));
