@@ -1,5 +1,4 @@
-import { it } from 'node:test';
-import { App, Modal, SuggestModal, Notice, Plugin, PluginSettingTab, Setting, TFile, MarkdownView } from 'obsidian';
+import { App, SuggestModal, Notice, Plugin, PluginSettingTab, Setting, TFile, MarkdownView } from 'obsidian';
 
 function findIndexes<T>(anArray: T[], predicate: (element: T, index: number) => boolean): number[] {
     const indexes: number[] = [];
