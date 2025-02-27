@@ -1,3 +1,4 @@
 {
-  "notePath": "test/Tables"
+  "notePath": "test/Tables",
+  "showWarning": true
 }

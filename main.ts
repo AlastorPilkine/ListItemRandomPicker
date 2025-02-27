@@ -11,61 +11,112 @@ function findIndexes<T>(anArray: T[], predicate: (element: T, index: number) => 
   }
 interface LIRPPluginSettings {
     notePath: string;
+    showWarning: boolean;
 }
 
 const DEFAULT_SETTINGS: LIRPPluginSettings = {
-    notePath: 'Full path of a note'
+    notePath: 'Full path of a note',
+    showWarning: true,
 };
 
 interface LIRPListInterface {
     title: string;
     description: string;
-    hidden: boolean;
-    macro: boolean;
     items: string[];
-    warning: string[];
+    getListSuggestion(): LIRPSuggestionInterface;
+    notHidden(): boolean;
     pickRandomItem(): string;
+    getWarning(): string[];
 }
 
 class LIRPList implements LIRPListInterface {
     title: string;
     description: string;
     hidden: boolean;
-    macro: boolean;
     items: string[];
     warning: string[]
 
     constructor(lines: string[]) {
+        this.title = "";
+        this.description = "";
+        this.hidden = false;
         this.items = [];
         this.warning = [];
-        
+
         const headingRegEx = /^# +(.+)$/;
-        // to do hidden list
         this.title = lines[0].replace(headingRegEx, "$1");
-        lines.splice(0, 1);
+        const italicHeadingRegex = /^(_|\*)\S/;
+        if (italicHeadingRegex.test(this.title)) {
+            this.hidden = true;
+        } else {
+            this.hidden = false;
+        }
+        lines.shift();
         const listBeginItemRegex = /^(-|\d+\.) +(.+)$/;
         const listBeginIndexes = findIndexes(lines, (element) => listBeginItemRegex.test(element));
         if (listBeginIndexes.length === 0) {
-            this.warning.push('No list items in note');
-            // to do : Macro !
+            this.warning.push(`No items in list ${this.title}`);
+            this.hidden = true;
             return;
         }
         const cleanLines = lines.map((element) => {
             return element.replace(listBeginItemRegex, "$2")
         });
         if (listBeginIndexes[0] !== 0) {
-            // there is a description
-            this.description = cleanLines.slice(0, 1).join('\n');
+            let mdDescription = cleanLines.slice(0, listBeginIndexes[0]);
+            // taking care of MD022
+            //   MD022/blanks-around-headings: Headings should be surrounded by blank lines
+            if (mdDescription[0] === "") {
+                mdDescription.shift();
+            }
+            // taking care of MD032
+            //   MD032/blanks-around-lists: Lists should be surrounded by blank lines
+            // Due to split on '\n', the slice, and at least a join on '\n' the last '\n' is always lost !
+            // So the folowing code is useless
+            // if (mdDescription.at(-1) === "") {
+            //     mdDescription.pop();
+            // }
+            this.description = mdDescription.join('\n');
         } else {
             this.description = "";
         }
 
         const listBeginCount = listBeginIndexes.length
+        let item: string[];
         for (let currentIndex = 0; currentIndex < (listBeginCount - 1); currentIndex++) {
-            // to do item weight
-            this.items.push((cleanLines.slice(listBeginIndexes[currentIndex], listBeginIndexes[currentIndex + 1]).join('\n')));
+            item = (cleanLines.slice(listBeginIndexes[currentIndex], listBeginIndexes[currentIndex + 1]));
+            this.pushItemBasedOnWeight(item);
         }
-        this.items.push((cleanLines.slice(listBeginIndexes[listBeginCount - 1]).join('\n')));
+        item = (cleanLines.slice(listBeginIndexes[listBeginCount - 1]));
+        this.pushItemBasedOnWeight(item);
+    }
+
+    pushItemBasedOnWeight(item: string[]) : void {
+        const ItemWithWeightRegEx = /^\((\d+)\)\s+(.+)$/;
+        let regExExecution
+        let repeat: number;
+        if ((regExExecution = ItemWithWeightRegEx.exec(item[0])) !== null) {
+            repeat = Number(regExExecution[1]);
+            item[0] = regExExecution[2];
+        } else {
+            repeat = 1;
+        }
+        const stringItem = item.join('\n');
+        for (let i = 0; i < repeat; i++) {
+            this.items.push(stringItem);
+        }
+    };
+
+    getListSuggestion(): LIRPSuggestionInterface {
+        const suggestion = {
+            title: this.title,
+            description: (this.description.split('\n')[0]),
+        }
+        return suggestion;
+    };
+
+    notHidden(): boolean {
+        return !this.hidden;
     }
 
     pickRandomItem(): string {
@@ -76,38 +127,43 @@ class LIRPList implements LIRPListInterface {
         }
     }
 
+    getWarning(): string[] {
+        return this.warning;
+    }
+
 }
 interface LIRPNoteInterface {
-    fullPath: string;
+    noteName: string;
     description: string;
-    loadFromNote(noteContent: string): boolean;
-    getListSuggestion(): LIRPSuggestionInterface[];
+    loadFromNote(noteName: string, noteContent: string): boolean;
+    getNoteSuggestion(): LIRPSuggestionInterface[];
     pickRandomItemFromList(listTitle: string): string; 
     getError(): string[];
     getWarning(): string[];
 }
 
 class LIRPNote implements LIRPNoteInterface {
-    fullPath: string;
+    noteName: string;
     description: string;
     list: LIRPList[];
     error: string[];
     warning: string[];
 
     constructor () {
-        this.fullPath = "";
+        this.noteName = "";
         this.description = "";
         this.list = [];
         this.error = [];
         this.warning = [];
     }
 
-    loadFromNote(noteContent: string): boolean {
+    loadFromNote(noteName: string, noteContent: string): boolean {
+        this.noteName = noteName;
         const lines = noteContent.split('\n');
         const headingRegex = /^# .+$/;
         let headingIndexes = findIndexes(lines, (element) => headingRegex.test(element));
         if (headingIndexes.length === 0) {
-            this.error.push('No heading in note');
+            this.error.push(`No heading in note`);
             return false;
         }
         let headingBegin = 0;
@@ -124,17 +180,15 @@ class LIRPNote implements LIRPNoteInterface {
         return true
     }
 
-    getListSuggestion(): LIRPSuggestionInterface[] {
-        let listSuggestion: LIRPSuggestionInterface[];
-        listSuggestion = [];
+    getNoteSuggestion(): LIRPSuggestionInterface[] {
+        let noteSuggestion: LIRPSuggestionInterface[];
+        noteSuggestion = [];
         this.list.forEach((element) => {
-            // to do hidden list
-            listSuggestion.push({
-                title: element.title,
-                description: element.description,
-            })
+            if (element.notHidden()) {
+                noteSuggestion.push(element.getListSuggestion());
+            }
         });
-        return listSuggestion;
+        return noteSuggestion;
     }
 
     pickRandomItemFromList(listTitle: string): string {
@@ -147,11 +201,22 @@ class LIRPNote implements LIRPNoteInterface {
     } 
 
     getError(): string[] {
-        return []
+        return this.error;
     };
 
     getWarning(): string[] {
-        return []
+        let allWarning: string[];
+        allWarning = [];
+        allWarning = allWarning.concat(this.warning);
+        this.list.forEach((element) => {
+            allWarning = allWarning.concat(element.getWarning());
+        });
+        let NoteWarning: string[];
+        NoteWarning = [];
+        allWarning.forEach((element) => 
+            NoteWarning.push(`Warning in note "${this.noteName}" : ${element}`)
+        );
+        return NoteWarning;
     };
 
 }
@@ -227,12 +292,17 @@ export default class ListItemRandomPicker extends Plugin {
         const content = await this.app.vault.cachedRead(file);
         const currentLIRP = new LIRPNote();
 
-        const loadSuccess = currentLIRP.loadFromNote(content);
+        const loadSuccess = currentLIRP.loadFromNote(this.settings.notePath, content);
         if (!loadSuccess) {
-            currentLIRP.error.forEach((element) => new Notice(element));
+            currentLIRP.getError().forEach((element) => new Notice(element));
             return
         }
-        new LIRPSuggestModal(this.app, currentLIRP.getListSuggestion(), (title) => {
+        if (this.settings.showWarning) {
+            currentLIRP.getWarning().forEach(element => {
+                new Notice(element);
+            });
+        };
+        new LIRPSuggestModal(this.app, currentLIRP.getNoteSuggestion(), (title) => {
             this.insertString(currentLIRP.pickRandomItemFromList(title));
         }).open();
     }
@@ -269,10 +339,7 @@ class LIRPSettingTab extends PluginSettingTab {
 
     display(): void {
         const { containerEl } = this;
-
         containerEl.empty();
-
-        // containerEl.createEl('h2', { text: 'Settings for List Item Random Picker.' });
 
         new Setting(containerEl)
             .setName('Note Path')
@@ -283,6 +350,18 @@ class LIRPSettingTab extends PluginSettingTab {
                 .onChange(async (value) => {
                     this.plugin.settings.notePath = value;
                     await this.plugin.saveSettings();
-                }));
+                })
+            );
+
+        new Setting(containerEl)
+        .setName("Show warning")
+        .setDesc("Show warnings of Note and lists, if present.")
+        .addToggle((toggle) => {
+            toggle.setValue(this.plugin.settings.showWarning);
+            toggle.onChange(async (value) => {
+                this.plugin.settings.showWarning = value;
+                await this.plugin.saveSettings();
+            })
+        });
     }
 }
