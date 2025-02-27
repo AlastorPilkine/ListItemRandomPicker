@@ -233,7 +233,7 @@ class LIRPNote implements LIRPNoteInterface {
         const stringMacroRefRegex: string = `\{(${this.list.map((element) => element.title).join('|')})\}`;
         const macroRefRegex = new RegExp (stringMacroRefRegex);
         if (macroRefRegex.test(randomItem) && macroRecursion == 0) {
-            new Notice(`Macro depth limit reached in note "${this.noteName}" after calling   "${listTitle}"`);
+            new Notice(`Macro depth limit reached in note "${this.noteName}" after calling "${listTitle}"`);
         };
         return randomItem;
     } 
@@ -381,7 +381,7 @@ class LIRPSettingTab extends PluginSettingTab {
 
         new Setting(containerEl)
             .setName('Note Path')
-            .setDesc('Path to the note containing the lists.')
+            .setDesc('The path and filename of the note that contains the lists to be used. Exemple : "Folder/Note".')
             .addText(text => text
                 .setPlaceholder('Enter the path to your note')
                 .setValue(this.plugin.settings.notePath)
@@ -393,7 +393,7 @@ class LIRPSettingTab extends PluginSettingTab {
 
         new Setting(containerEl)
         .setName("Show warning")
-        .setDesc("Show warnings of Note and lists, if present.")
+        .setDesc('Display the warnings of notes and lists, if any. Warnings for macro depth limit reached are always displayed.')
         .addToggle((toggle) => {
             toggle.setValue(this.plugin.settings.showWarning);
             toggle.onChange(async (value) => {
@@ -402,10 +402,9 @@ class LIRPSettingTab extends PluginSettingTab {
             })
         });
 
-
         new Setting(containerEl)
               .setName("Macro depth limit")
-              .setDesc("Macro recursion limit: how many nested macro calls are allowed")
+              .setDesc("Macro recursion limit: how many nested macro calls are allowed. Zero prevents nested macros from being resolved.")
               .addSlider((slider) =>
                 slider
                   .setValue(this.plugin.settings.maxMacroDepth - 1)
