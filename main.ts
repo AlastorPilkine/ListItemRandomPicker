@@ -1,3 +1,4 @@
+import { it } from 'node:test';
 import { App, Modal, SuggestModal, Notice, Plugin, PluginSettingTab, Setting, TFile, MarkdownView } from 'obsidian';
 
 function findIndexes<T>(anArray: T[], predicate: (element: T, index: number) => boolean): number[] {
@@ -88,6 +89,11 @@ class LIRPList implements LIRPListInterface {
             this.pushItemBasedOnWeight(item);
         }
         item = (cleanLines.slice(listBeginIndexes[listBeginCount - 1]));
+        // taking care of MD022
+        //   MD022/blanks-around-headings: Headings should be surrounded by blank lines
+        if (item.at(-1) === "") {
+            item.pop();
+        }        
         this.pushItemBasedOnWeight(item);
     }
 
@@ -120,11 +126,11 @@ class LIRPList implements LIRPListInterface {
     }
 
     pickRandomItem(): string {
+        let randomItem: string = "";
         if (this.items.length > 0) {
-            return this.items[Math.floor(Math.random() * this.items.length)]; //.replace(/\n/g, '')
-        } else {
-            return "";
+            randomItem = this.items[Math.floor(Math.random() * this.items.length)];
         }
+        return randomItem;
     }
 
     getWarning(): string[] {
@@ -137,7 +143,7 @@ interface LIRPNoteInterface {
     description: string;
     loadFromNote(noteName: string, noteContent: string): boolean;
     getNoteSuggestion(): LIRPSuggestionInterface[];
-    pickRandomItemFromList(listTitle: string): string; 
+    pickRandomItemFromList(listTitle: string, macroRecursion: number): string; 
     getError(): string[];
     getWarning(): string[];
 }
@@ -192,13 +198,34 @@ class LIRPNote implements LIRPNoteInterface {
         return noteSuggestion;
     }
 
-    pickRandomItemFromList(listTitle: string): string {
+    execMacroSubstitution(item: string, macroRecursion: number = 1): string {
+        const currentMacroRecusion = macroRecursion -1;
+        let modifiedItem: string = item;
+        this.list.forEach((element) => {
+            const stringTitleRegex  = `\{(${element.title})\}`;
+            const titleRegex = new RegExp(stringTitleRegex, 'm');
+            while (titleRegex.test(modifiedItem)) {
+                const execTitleRegex = titleRegex.exec(modifiedItem);
+                if (execTitleRegex !== null) {
+                    const listTitle = execTitleRegex[1]
+                    modifiedItem = modifiedItem.replace(titleRegex, this.pickRandomItemFromList(listTitle, currentMacroRecusion));
+                }
+            }
+        });
+        return modifiedItem;
+    }
+
+
+    pickRandomItemFromList(listTitle: string, macroRecursion: number = 1): string {
+        let randomItem: string = "";
         const currentList = this.list.find((element) => element.title === listTitle);
         if (currentList !== undefined) {
-            return currentList.pickRandomItem();
-        } else {
-            return ""
+            randomItem = currentList.pickRandomItem();
+            for (let repeat = 0; repeat < macroRecursion; repeat++) {
+                randomItem = this.execMacroSubstitution(randomItem);
+            }
         }
+        return randomItem;
     } 
 
     getError(): string[] {
