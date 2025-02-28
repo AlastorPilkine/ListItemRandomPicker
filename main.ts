@@ -407,7 +407,7 @@ class LIRPSettingTab extends PluginSettingTab {
               .addSlider((slider) =>
                 slider
                   .setValue(this.plugin.settings.maxMacroDepth - 1)
-                  .setLimits(0, 4, 1)
+                  .setLimits(0, 10, 1)
                   .setDynamicTooltip()
                   .onChange(async (value) => {
                     this.plugin.settings.maxMacroDepth = value + 1;
