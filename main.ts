@@ -143,6 +143,13 @@ class LIRPList implements LIRPListInterface {
     }
 
 }
+
+interface LIRPExecMacroInterface {
+    lastListTitle: string;
+    modifiedItem: string;
+
+}
+
 interface LIRPNoteInterface {
     noteName: string;
     description: string;
@@ -202,36 +209,42 @@ class LIRPNote implements LIRPNoteInterface {
         return noteSuggestion;
     }
 
-    execMacroSubstitution(item: string, macroRecursion: number): string {
-        let modifiedItem: string = item;
-        this.list.forEach((element) => {
-            const stringTitleRegex  = `\{(${escapeRegex(element.title)})\}`;
-            const titleRegex = new RegExp(stringTitleRegex, 'm');
-            while (titleRegex.test(modifiedItem)) {
-                const execTitleRegex = titleRegex.exec(modifiedItem);
-                if (execTitleRegex !== null) {
-                    const listTitle = execTitleRegex[1]
-                    modifiedItem = modifiedItem.replace(titleRegex, this.pickRandomItemFromList(listTitle, macroRecursion - 1));
-                }
-            }
-        });
-        return modifiedItem;
+    execMacroSubstitution(item: string, macroRecursion: number): LIRPExecMacroInterface {
+        const stringMacroRefRegex: string = `\{(${this.list.map((element) => element.title).join('|')})\}`;
+        const macroRefRegex = new RegExp (stringMacroRefRegex,'mg');
+        let match;
+        let modifiedItem:string = item;
+        let listTitle:string = "";
+        while ((match = macroRefRegex.exec(modifiedItem)) !== null) {
+            let newValue: string = this.pickRandomItemFromList(match[1], -1); 
+            listTitle = match[0];
+            modifiedItem = modifiedItem.replace(listTitle, newValue);
+            macroRefRegex.lastIndex = match.index + newValue.length;
+        }
+        return {
+            lastListTitle: listTitle,
+            modifiedItem: modifiedItem,
+        };
     }
-
 
     pickRandomItemFromList(listTitle: string, macroRecursion: number): string {
         let randomItem: string = "";
+        let returnOfExecMacro: LIRPExecMacroInterface = {
+            lastListTitle: "",
+            modifiedItem: "",
+        };
         const currentList = this.list.find((element) => element.title === listTitle);
         if (currentList !== undefined) {
             randomItem = currentList.pickRandomItem();
             for (let repeat = 0; repeat < macroRecursion; repeat++) {
-                randomItem = this.execMacroSubstitution(randomItem, macroRecursion);
+                returnOfExecMacro = this.execMacroSubstitution(randomItem, macroRecursion);
+                randomItem = returnOfExecMacro.modifiedItem;
             }
         }
         const stringMacroRefRegex: string = `\{(${this.list.map((element) => element.title).join('|')})\}`;
         const macroRefRegex = new RegExp (stringMacroRefRegex);
-        if (macroRefRegex.test(randomItem) && macroRecursion == 0) {
-            new Notice(`Macro depth limit reached in note "${this.noteName}" after calling "${listTitle}"`);
+        if (macroRefRegex.test(randomItem) && macroRecursion !== -1) {
+            new Notice(`Macro depth limit reached in note "${this.noteName}" after calling "${returnOfExecMacro.lastListTitle}"`);
         };
         return randomItem;
     } 

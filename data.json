@@ -1,6 +1,6 @@
 {
-  "notePath": "test/Tables2",
+  "notePath": "test/Tables3",
   "showWarning": true,
-  "maxMacroDepth": 4,
+  "maxMacroDepth": 2,
   "maxMacroRecursion": 1
 }
