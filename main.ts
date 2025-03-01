@@ -17,12 +17,14 @@ interface LIRPPluginSettings {
     notePath: string;
     showWarning: boolean;
     maxMacroDepth: number;
+    noticePrefix: string;
 }
 
 const DEFAULT_SETTINGS: LIRPPluginSettings = {
     notePath: 'Full path of a note',
     showWarning: true,
     maxMacroDepth: 1,
+    noticePrefix: '!',
 };
 
 interface LIRPListInterface {
@@ -147,7 +149,6 @@ class LIRPList implements LIRPListInterface {
 interface LIRPExecMacroInterface {
     lastListTitle: string;
     modifiedItem: string;
-
 }
 
 interface LIRPNoteInterface {
@@ -352,21 +353,27 @@ export default class ListItemRandomPicker extends Plugin {
             });
         };
         new LIRPSuggestModal(this.app, currentLIRP.getNoteSuggestion(), (title) => {
-            this.insertString(currentLIRP.pickRandomItemFromList(title, this.settings.maxMacroDepth));
+            this.workWithString(title, currentLIRP.pickRandomItemFromList(title, this.settings.maxMacroDepth));
         }).open();
     }
 
-    insertString(stringToInsert: string): void {
-        const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
+    workWithString(listTitle: string, stringToWorkWith: string): void {
+        const stringNoticeRegex:string = `^ *${this.settings.noticePrefix}(.*)`;
+        const noticeRegex = new RegExp(stringNoticeRegex);
 
-        if (activeView) {
-            const editor = activeView.editor;
-            const selection = editor.getSelection();
-            editor.replaceSelection(stringToInsert);
+        if (noticeRegex.test(listTitle)) {
+            new Notice(stringToWorkWith);
         } else {
-            new Notice("No active Markdown editor found.");
-        }
+            const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
 
+            if (activeView) {
+                const editor = activeView.editor;
+                const selection = editor.getSelection();
+                editor.replaceSelection(stringToWorkWith);
+            } else {
+                new Notice("No active Markdown editor found.");
+            }
+        }
     };
 
     async loadSettings() {
@@ -403,28 +410,41 @@ class LIRPSettingTab extends PluginSettingTab {
             );
 
         new Setting(containerEl)
-        .setName("Show warning")
-        .setDesc('Display the warnings of notes and lists, if any. Warnings for macro depth limit reached are always displayed.')
-        .addToggle((toggle) => {
-            toggle.setValue(this.plugin.settings.showWarning);
-            toggle.onChange(async (value) => {
-                this.plugin.settings.showWarning = value;
-                await this.plugin.saveSettings();
-            })
-        });
+            .setName("Show warning")
+            .setDesc('Display the warnings of notes and lists, if any. Warnings for macro depth limit reached are always displayed.')
+            .addToggle((toggle) => {
+                toggle.setValue(this.plugin.settings.showWarning);
+                toggle.onChange(async (value) => {
+                    this.plugin.settings.showWarning = value;
+                    await this.plugin.saveSettings();
+                })
+            });
 
         new Setting(containerEl)
-              .setName("Macro depth limit")
-              .setDesc("Macro recursion limit: how many nested macro calls are allowed. Zero prevents nested macros from being resolved.")
-              .addSlider((slider) =>
+            .setName("Macro depth limit")
+            .setDesc("Macro recursion limit: how many nested macro calls are allowed. Zero prevents nested macros from being resolved.")
+            .addSlider((slider) =>
                 slider
-                  .setValue(this.plugin.settings.maxMacroDepth - 1)
-                  .setLimits(0, 10, 1)
-                  .setDynamicTooltip()
-                  .onChange(async (value) => {
+                    .setValue(this.plugin.settings.maxMacroDepth - 1)
+                    .setLimits(0, 10, 1)
+                    .setDynamicTooltip()
+                    .onChange(async (value) => {
                     this.plugin.settings.maxMacroDepth = value + 1;
                     await this.plugin.saveSettings();
-                  })
-              );
+                    })
+            );
+        
+        new Setting(containerEl)
+            .setName('List prefix for notification')
+            .setDesc('If a list heading begin with the specified value, the picked item is not inserted, but notified.')
+            .addText(text => text
+                .setPlaceholder('Enter prefix value')
+                .setValue(this.plugin.settings.noticePrefix)
+                .onChange(async (value) => {
+                    this.plugin.settings.noticePrefix = value;
+                    await this.plugin.saveSettings();
+                })
+            );
+
     }
 }
