@@ -1,3 +1,4 @@
+import { exec } from 'child_process';
 import { App, SuggestModal, Notice, Plugin, PluginSettingTab, Setting, TFile, MarkdownView } from 'obsidian';
 
 function findIndexes<T>(anArray: T[], predicate: (element: T, index: number) => boolean): number[] {
@@ -106,7 +107,7 @@ class LIRPList implements LIRPListInterface {
 
     pushItemBasedOnWeight(item: string[]) : void {
         const ItemWithWeightRegEx = /^\((\d+)\)\s+(.+)$/;
-        let regExExecution
+        let regExExecution;
         let repeat: number;
         if ((regExExecution = ItemWithWeightRegEx.exec(item[0])) !== null) {
             repeat = Number(regExExecution[1]);
@@ -353,23 +354,38 @@ export default class ListItemRandomPicker extends Plugin {
             });
         };
         new LIRPSuggestModal(this.app, currentLIRP.getNoteSuggestion(), (title) => {
-            this.workWithString(title, currentLIRP.pickRandomItemFromList(title, this.settings.maxMacroDepth));
+            this.workWithTitle(currentLIRP, title);
         }).open();
     }
 
-    workWithString(listTitle: string, stringToWorkWith: string): void {
+    workWithTitle(Note: LIRPNoteInterface, listTitle: string): void {
         const stringNoticeRegex:string = `^ *${this.settings.noticePrefix}(.*)`;
         const noticeRegex = new RegExp(stringNoticeRegex);
 
         if (noticeRegex.test(listTitle)) {
-            new Notice(stringToWorkWith);
+            new Notice(Note.pickRandomItemFromList(listTitle, this.settings.maxMacroDepth));
         } else {
             const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
 
             if (activeView) {
+                let stringToInsert: string = '';
                 const editor = activeView.editor;
                 const selection = editor.getSelection();
-                editor.replaceSelection(stringToWorkWith);
+                const repeatInsertRegEx = /^(\d+)(.*)/gm;
+                let regExExecution;
+                let repeat: number;
+                if ((regExExecution = repeatInsertRegEx.exec(selection)) !== null) {
+                    const repeat = Number(regExExecution[1]);
+                    const delimiter = selection.replace(/^\d+/, '');
+                    const arrayStringToinsert: string[] = [];
+                    for (let i = 0; i < repeat; i++) {
+                        arrayStringToinsert.push(Note.pickRandomItemFromList(listTitle, this.settings.maxMacroDepth));
+                    }
+                    stringToInsert = arrayStringToinsert.join(delimiter);
+                } else {
+                    stringToInsert = Note.pickRandomItemFromList(listTitle, this.settings.maxMacroDepth);
+                }
+                editor.replaceSelection(stringToInsert);
             } else {
                 new Notice("No active Markdown editor found.");
             }
