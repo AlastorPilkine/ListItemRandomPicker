@@ -230,7 +230,7 @@ class LIRPNote implements LIRPNoteInterface {
     }
 
     execMacroSubstitution(item: string, macroRecursion: number): LIRPExecMacroInterface {
-        const stringMacroRefRegex: string = `\{(${this.list.map((element) => element.title).join('|')})\}`;
+        const stringMacroRefRegex: string = `\{(${this.list.map((element) => escapeRegex(element.title)).join('|')})\}`;
         const macroRefRegex = new RegExp (stringMacroRefRegex,'mg');
         let match;
         let modifiedItem:string = item;
