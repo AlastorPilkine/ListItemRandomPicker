@@ -26,7 +26,7 @@ interface LIRPPluginSettings {
 }
 
 const DEFAULT_SETTINGS: LIRPPluginSettings = {
-    notePath: 'Full path of a note',
+    notePath: 'Path of a note or a folder',
     showWarning: true,
     maxMacroDepth: 1,
     selectionForNotification: '!',
@@ -382,7 +382,7 @@ class LIRPMultiNote implements LIRPNoteInterface {
         } else {
             let allWarning:string[] = [];
             this.multiNote.map((element) => {
-                allWarning = allWarning.concat(element.getError());
+                allWarning = allWarning.concat(element.getWarning());
             });
             return allWarning;
         }
@@ -572,6 +572,8 @@ class LIRPSettingTab extends PluginSettingTab {
         const { containerEl } = this;
         containerEl.empty();
 
+        containerEl.createEl('h2', { text: 'Note setting' });
+
         new Setting(containerEl)
             .setName('Note Path')
             .setDesc('The path and filename of the note that contains the lists to be used. Exemple : "Folder/Note".')
@@ -584,6 +586,19 @@ class LIRPSettingTab extends PluginSettingTab {
                 })
             );
 
+        containerEl.createEl('h2', { text: 'Interface settings' });
+
+        new Setting(containerEl)
+            .setName('Show note selector')
+            .setDesc('If path is a folder')
+            .addToggle((toggle) => {
+                toggle.setValue(this.plugin.settings.showNoteSelector);
+                toggle.onChange(async (value) => {
+                    this.plugin.settings.showNoteSelector = value;
+                    await this.plugin.saveSettings();
+                })
+            });
+
         new Setting(containerEl)
             .setName('Show warning')
             .setDesc('Display the warnings of notes and lists, if any. Warnings for macro depth limit reached are always displayed.')
@@ -595,19 +610,7 @@ class LIRPSettingTab extends PluginSettingTab {
                 })
             });
 
-        new Setting(containerEl)
-            .setName('Macro depth limit')
-            .setDesc('Macro recursion limit: how many nested macro calls are allowed. Zero prevents nested macros from being resolved.')
-            .addSlider((slider) =>
-                slider
-                    .setValue(this.plugin.settings.maxMacroDepth)
-                    .setLimits(0, 10, 1)
-                    .setDynamicTooltip()
-                    .onChange(async (value) => {
-                    this.plugin.settings.maxMacroDepth = value;
-                    await this.plugin.saveSettings();
-                    })
-            );
+        containerEl.createEl('h2', { text: 'List settings' });
 
         new Setting(containerEl)
             .setName('Null value')
@@ -633,6 +636,8 @@ class LIRPSettingTab extends PluginSettingTab {
                 })
             );
 
+        containerEl.createEl('h2', { text: 'Selection settings' });
+
         new Setting(containerEl)
             .setName('Selection value for notification')
             .setDesc('If the text selected has this value, the item is not inserted, but notified !')
@@ -656,16 +661,21 @@ class LIRPSettingTab extends PluginSettingTab {
                 })
             });
 
-        new Setting(containerEl)
-            .setName('Show note selector')
-            .setDesc('If path is a folder')
-            .addToggle((toggle) => {
-                toggle.setValue(this.plugin.settings.showNoteSelector);
-                toggle.onChange(async (value) => {
-                    this.plugin.settings.showNoteSelector = value;
-                    await this.plugin.saveSettings();
-                })
-            });
+            containerEl.createEl('h2', { text: 'Technical settings' });
 
-    }
+            new Setting(containerEl)
+                .setName('Macro depth limit')
+                .setDesc('Macro recursion limit: how many nested macro calls are allowed. Zero prevents nested macros from being resolved.')
+                .addSlider((slider) =>
+                    slider
+                        .setValue(this.plugin.settings.maxMacroDepth)
+                        .setLimits(0, 10, 1)
+                        .setDynamicTooltip()
+                        .onChange(async (value) => {
+                        this.plugin.settings.maxMacroDepth = value;
+                        await this.plugin.saveSettings();
+                        })
+                );
+    
+        }
 }
