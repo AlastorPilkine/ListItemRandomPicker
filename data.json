@@ -1,7 +1,7 @@
 {
-  "notePath": "test/Tables2",
+  "notePath": "test/Tables3",
   "showWarning": true,
-  "maxMacroDepth": 2,
-  "noticePrefix": "!",
-  "maxMacroRecursion": 1
+  "maxMacroDepth": 0,
+  "selectionForNotification": "!",
+  "deleteSelectionForNotification": true
 }

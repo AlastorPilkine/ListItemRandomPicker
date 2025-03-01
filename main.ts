@@ -18,14 +18,16 @@ interface LIRPPluginSettings {
     notePath: string;
     showWarning: boolean;
     maxMacroDepth: number;
-    noticePrefix: string;
+    selectionForNotification: string;
+    deleteSelectionForNotification: boolean;
 }
 
 const DEFAULT_SETTINGS: LIRPPluginSettings = {
     notePath: 'Full path of a note',
     showWarning: true,
     maxMacroDepth: 1,
-    noticePrefix: '!',
+    selectionForNotification: '!',
+    deleteSelectionForNotification: false,
 };
 
 interface LIRPListInterface {
@@ -232,7 +234,7 @@ class LIRPNote implements LIRPNoteInterface {
     pickRandomItemFromList(listTitle: string, macroRecursion: number): string {
         let randomItem: string = "";
         let returnOfExecMacro: LIRPExecMacroInterface = {
-            lastListTitle: "",
+            lastListTitle: listTitle,
             modifiedItem: "",
         };
         const currentList = this.list.find((element) => element.title === listTitle);
@@ -359,37 +361,41 @@ export default class ListItemRandomPicker extends Plugin {
     }
 
     workWithTitle(Note: LIRPNoteInterface, listTitle: string): void {
-        const stringNoticeRegex:string = `^ *${this.settings.noticePrefix}(.*)`;
-        const noticeRegex = new RegExp(stringNoticeRegex);
-
-        if (noticeRegex.test(listTitle)) {
-            new Notice(Note.pickRandomItemFromList(listTitle, this.settings.maxMacroDepth));
-        } else {
             const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
 
             if (activeView) {
-                let stringToInsert: string = '';
+                const selectionForNotificationRegex:string = `^${this.settings.selectionForNotification}$`;
+                const noticeRegex = new RegExp(selectionForNotificationRegex);
+        
                 const editor = activeView.editor;
                 const selection = editor.getSelection();
-                const repeatInsertRegEx = /^(\d+)(.*)/gm;
-                let regExExecution;
-                let repeat: number;
-                if ((regExExecution = repeatInsertRegEx.exec(selection)) !== null) {
-                    const repeat = Number(regExExecution[1]);
-                    const delimiter = selection.replace(/^\d+/, '');
-                    const arrayStringToinsert: string[] = [];
-                    for (let i = 0; i < repeat; i++) {
-                        arrayStringToinsert.push(Note.pickRandomItemFromList(listTitle, this.settings.maxMacroDepth));
+
+                if (noticeRegex.test(selection)) {
+                    new Notice(Note.pickRandomItemFromList(listTitle, this.settings.maxMacroDepth));
+                    if (this.settings.deleteSelectionForNotification) {
+                        editor.replaceSelection('');
                     }
-                    stringToInsert = arrayStringToinsert.join(delimiter);
                 } else {
-                    stringToInsert = Note.pickRandomItemFromList(listTitle, this.settings.maxMacroDepth);
-                }
-                editor.replaceSelection(stringToInsert);
+                    let stringToInsert: string = '';
+                    const repeatInsertRegEx = /^(\d+)(.*)/gm;
+                    let regExExecution;
+                    let repeat: number;
+                    if ((regExExecution = repeatInsertRegEx.exec(selection)) !== null) {
+                        const repeat = Number(regExExecution[1]);
+                        const delimiter = selection.replace(/^\d+/, '');
+                        const arrayStringToinsert: string[] = [];
+                        for (let i = 0; i < repeat; i++) {
+                            arrayStringToinsert.push(Note.pickRandomItemFromList(listTitle, this.settings.maxMacroDepth));
+                        }
+                        stringToInsert = arrayStringToinsert.join(delimiter);
+                    } else {
+                        stringToInsert = Note.pickRandomItemFromList(listTitle, this.settings.maxMacroDepth);
+                    }
+                    editor.replaceSelection(stringToInsert);
+                };
             } else {
                 new Notice("No active Markdown editor found.");
-            }
-        }
+            };
     };
 
     async loadSettings() {
@@ -426,7 +432,7 @@ class LIRPSettingTab extends PluginSettingTab {
             );
 
         new Setting(containerEl)
-            .setName("Show warning")
+            .setName('Show warning')
             .setDesc('Display the warnings of notes and lists, if any. Warnings for macro depth limit reached are always displayed.')
             .addToggle((toggle) => {
                 toggle.setValue(this.plugin.settings.showWarning);
@@ -437,30 +443,41 @@ class LIRPSettingTab extends PluginSettingTab {
             });
 
         new Setting(containerEl)
-            .setName("Macro depth limit")
-            .setDesc("Macro recursion limit: how many nested macro calls are allowed. Zero prevents nested macros from being resolved.")
+            .setName('Macro depth limit')
+            .setDesc('Macro recursion limit: how many nested macro calls are allowed. Zero prevents nested macros from being resolved.')
             .addSlider((slider) =>
                 slider
-                    .setValue(this.plugin.settings.maxMacroDepth - 1)
+                    .setValue(this.plugin.settings.maxMacroDepth)
                     .setLimits(0, 10, 1)
                     .setDynamicTooltip()
                     .onChange(async (value) => {
-                    this.plugin.settings.maxMacroDepth = value + 1;
+                    this.plugin.settings.maxMacroDepth = value;
                     await this.plugin.saveSettings();
                     })
             );
         
         new Setting(containerEl)
-            .setName('List prefix for notification')
-            .setDesc('If a list heading begin with the specified value, the picked item is not inserted, but notified.')
+            .setName('Selection value for notification')
+            .setDesc('If the text selected has this value, the item is not inserted, but notified !')
             .addText(text => text
-                .setPlaceholder('Enter prefix value')
-                .setValue(this.plugin.settings.noticePrefix)
+                .setPlaceholder('Enter value')
+                .setValue(this.plugin.settings.selectionForNotification)
                 .onChange(async (value) => {
-                    this.plugin.settings.noticePrefix = value;
+                    this.plugin.settings.selectionForNotification = value;
                     await this.plugin.saveSettings();
                 })
             );
+
+        new Setting(containerEl)
+            .setName('Delete selection value for notification')
+            .setDesc('If set, the selected value for notification is deleted.')
+            .addToggle((toggle) => {
+                toggle.setValue(this.plugin.settings.deleteSelectionForNotification);
+                toggle.onChange(async (value) => {
+                    this.plugin.settings.deleteSelectionForNotification = value;
+                    await this.plugin.saveSettings();
+                })
+            });
 
     }
 }
