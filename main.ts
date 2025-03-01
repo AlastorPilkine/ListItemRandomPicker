@@ -1,5 +1,5 @@
 import { exec } from 'child_process';
-import { App, SuggestModal, Notice, Plugin, PluginSettingTab, Setting, TFile, MarkdownView } from 'obsidian';
+import { App, SuggestModal, Notice, Plugin, PluginSettingTab, Setting, TFile, TFolder, MarkdownView} from 'obsidian';
 
 function findIndexes<T>(anArray: T[], predicate: (element: T, index: number) => boolean): number[] {
     const indexes: number[] = [];
@@ -22,6 +22,7 @@ interface LIRPPluginSettings {
     deleteSelectionForNotification: boolean;
     nullValue: string;
     escapeValue: string;
+    showNoteSelector: boolean;
 }
 
 const DEFAULT_SETTINGS: LIRPPluginSettings = {
@@ -32,6 +33,7 @@ const DEFAULT_SETTINGS: LIRPPluginSettings = {
     deleteSelectionForNotification: false,
     nullValue: 'null',
     escapeValue: '//',
+    showNoteSelector: true,
 };
 
 interface LIRPListInterface {
@@ -339,7 +341,7 @@ class LIRPMultiNote implements LIRPNoteInterface {
         this.multiNote.map((element) => {
             noteSuggestion.push({
                 noteName: element.noteName,
-                title: '',
+                title: element.noteName,
                 description: (element.description.split('\n')[0]),
             });
         });
@@ -397,9 +399,9 @@ interface LIRPSuggestionInterface {
 
 export class LIRPSuggestModal extends SuggestModal<LIRPSuggestionInterface> {
     items: LIRPSuggestionInterface[];
-    callback: (value: string) => void;
+    callback: (value: LIRPSuggestionInterface) => void;
   
-    constructor(app: App, items: LIRPSuggestionInterface[], callback: (value: string) => void) {
+    constructor(app: App, items: LIRPSuggestionInterface[], callback: (value: LIRPSuggestionInterface) => void) {
       super(app);
       this.items = items;
       this.callback = callback;
@@ -417,7 +419,7 @@ export class LIRPSuggestModal extends SuggestModal<LIRPSuggestionInterface> {
       }
   
       onChooseSuggestion(item: LIRPSuggestionInterface, evt: MouseEvent | KeyboardEvent) {
-        this.callback(item.title);
+        this.callback(item);
       }}
 
 export default class ListItemRandomPicker extends Plugin {
@@ -427,14 +429,14 @@ export default class ListItemRandomPicker extends Plugin {
         await this.loadSettings();
 
         this.addRibbonIcon('list-tree', 'Pick random list item', (evt: MouseEvent) => {
-            this.doTheJob(this.settings.notePath + '.md');
+            this.doTheJob(this.settings.notePath);
         });
 
         this.addCommand({
             id: 'insert-random-item',
             name: 'Insert random item from list',
             callback: () => {
-                this.doTheJob(this.settings.notePath + '.md');
+                this.doTheJob(this.settings.notePath);
             }
         });
 
@@ -446,34 +448,69 @@ export default class ListItemRandomPicker extends Plugin {
     }
 
     async doTheJob(fullNotePath: string): Promise<void> {
-        const file = this.app.vault.getAbstractFileByPath(fullNotePath);
+        const currentLIRP = new LIRPMultiNote(this.settings.nullValue, this.settings.escapeValue);
 
-        if (!file) {
-            new Notice('Note not found!');
-            return;
-        }
-
-        if (!(file instanceof TFile)) {
-            new Notice('Invalid file type. Expected a Markdown note file.');
-            return;
-        }
-
-        const content = await this.app.vault.cachedRead(file);
-        const currentLIRP = new LIRPNote(this.settings.nullValue, this.settings.escapeValue);
-
-        const loadSuccess = currentLIRP.loadFromNote(this.settings.notePath, content);
-        if (!loadSuccess) {
-            currentLIRP.getError().forEach((element) => new Notice(element));
-            return
-        }
-        if (this.settings.showWarning) {
-            currentLIRP.getWarning().forEach(element => {
-                new Notice(element);
-            });
+        let fileSystemObject = this.app.vault.getAbstractFileByPath(fullNotePath);
+        if (fileSystemObject instanceof TFolder) {
+            let loadWithoutError:boolean = true;
+            for (const currentFSObject of fileSystemObject.children) {
+                if (currentFSObject.path.endsWith(".md")) {
+                    const currentFile = this.app.vault.getAbstractFileByPath(currentFSObject.path);
+                    if (currentFile instanceof TFile) {
+                        const content = await this.app.vault.cachedRead(currentFile);
+                        loadWithoutError =  loadWithoutError && currentLIRP.loadFromNote(currentFSObject.path.slice(0, -3), content);
+                    }
+                    
+                }
+              }
+            if (!loadWithoutError) {
+                currentLIRP.getError().map((element) => {
+                    new Notice(element);
+                });
+                return
+            }
+            if (this.settings.showWarning) {
+                currentLIRP.getWarning().forEach(element => {
+                    new Notice(element);
+                });
+            };
+            if (this.settings.showNoteSelector) {
+                new LIRPSuggestModal(this.app, currentLIRP.getNoteSuggestion(), (item) => {
+                    currentLIRP.selectNote(item.title);
+                    new LIRPSuggestModal(this.app, currentLIRP.getListSuggestion(), (item) => {
+                        this.workWithTitle(currentLIRP, item.title);
+                    }).open();
+                }).open();
+            } else {
+                new LIRPSuggestModal(this.app, currentLIRP.getListSuggestion(), (item) => {
+                    currentLIRP.selectNote(item.noteName);
+                    this.workWithTitle(currentLIRP, item.title);
+                }).open();
+            }
+        } else {
+            fileSystemObject = this.app.vault.getAbstractFileByPath(fullNotePath + '.md');
+            if (fileSystemObject instanceof TFile) {
+                const content = await this.app.vault.cachedRead(fileSystemObject);
+                
+                const loadSuccess = currentLIRP.loadFromNote(this.settings.notePath, content);
+                if (!loadSuccess) {
+                    currentLIRP.getError().forEach((element) => new Notice(element));
+                    return
+                }
+                currentLIRP.selectNote(this.settings.notePath);
+                if (this.settings.showWarning) {
+                    currentLIRP.getWarning().forEach(element => {
+                        new Notice(element);
+                    });
+                };
+                new LIRPSuggestModal(this.app, currentLIRP.getListSuggestion(), (item) => {
+                    this.workWithTitle(currentLIRP, item.title);
+                }).open();
+            } else {
+                new Notice('Error : check settings "Path " in plugin List Item Random Picker !');
+                return;
+            };
         };
-        new LIRPSuggestModal(this.app, currentLIRP.getListSuggestion(), (title) => {
-            this.workWithTitle(currentLIRP, title);
-        }).open();
     }
 
     workWithTitle(Note: LIRPNoteInterface, listTitle: string): void {
@@ -615,6 +652,17 @@ class LIRPSettingTab extends PluginSettingTab {
                 toggle.setValue(this.plugin.settings.deleteSelectionForNotification);
                 toggle.onChange(async (value) => {
                     this.plugin.settings.deleteSelectionForNotification = value;
+                    await this.plugin.saveSettings();
+                })
+            });
+
+        new Setting(containerEl)
+            .setName('Show note selector')
+            .setDesc('If path is a folder')
+            .addToggle((toggle) => {
+                toggle.setValue(this.plugin.settings.showNoteSelector);
+                toggle.onChange(async (value) => {
+                    this.plugin.settings.showNoteSelector = value;
                     await this.plugin.saveSettings();
                 })
             });
