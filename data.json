@@ -1,7 +1,8 @@
 {
   "notePath": "test/Tables3",
   "showWarning": true,
-  "maxMacroDepth": 0,
+  "maxMacroDepth": 10,
   "selectionForNotification": "!",
-  "deleteSelectionForNotification": true
+  "deleteSelectionForNotification": true,
+  "nullValue": "null"
 }

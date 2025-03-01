@@ -20,6 +20,8 @@ interface LIRPPluginSettings {
     maxMacroDepth: number;
     selectionForNotification: string;
     deleteSelectionForNotification: boolean;
+    nullValue: string;
+    escapeValue: string;
 }
 
 const DEFAULT_SETTINGS: LIRPPluginSettings = {
@@ -28,6 +30,8 @@ const DEFAULT_SETTINGS: LIRPPluginSettings = {
     maxMacroDepth: 1,
     selectionForNotification: '!',
     deleteSelectionForNotification: false,
+    nullValue: 'null',
+    escapeValue: '//',
 };
 
 interface LIRPListInterface {
@@ -47,7 +51,7 @@ class LIRPList implements LIRPListInterface {
     items: string[];
     warning: string[]
 
-    constructor(lines: string[]) {
+    constructor(lines: string[], nullValue: string, escapeString: string) {
         this.title = "";
         this.description = "";
         this.hidden = false;
@@ -96,18 +100,18 @@ class LIRPList implements LIRPListInterface {
         let item: string[];
         for (let currentIndex = 0; currentIndex < (listBeginCount - 1); currentIndex++) {
             item = (cleanLines.slice(listBeginIndexes[currentIndex], listBeginIndexes[currentIndex + 1]));
-            this.pushItemBasedOnWeight(item);
+            this.pushItemBasedOnWeight(item, nullValue, escapeString);
         }
         item = (cleanLines.slice(listBeginIndexes[listBeginCount - 1]));
         // taking care of MD022
         //   MD022/blanks-around-headings: Headings should be surrounded by blank lines
         if (item.at(-1) === "") {
             item.pop();
-        }        
-        this.pushItemBasedOnWeight(item);
+        }
+        this.pushItemBasedOnWeight(item, nullValue, escapeString);
     }
 
-    pushItemBasedOnWeight(item: string[]) : void {
+    pushItemBasedOnWeight(item: string[], nullValue: string, escapeString: string) : void {
         const ItemWithWeightRegEx = /^\((\d+)\)\s+(.+)$/;
         let regExExecution;
         let repeat: number;
@@ -117,7 +121,19 @@ class LIRPList implements LIRPListInterface {
         } else {
             repeat = 1;
         }
-        const stringItem = item.join('\n');
+        if (item[0] === nullValue) {
+            if (item.length === 1) {
+                item[0] = "";
+            } else {
+                item.shift()
+            };
+        };
+        const stringRegex = `^ *${escapeString}(.*)`;
+        const escapeStringRegEx = new RegExp(stringRegex, 'gm');
+        const escapeItem = item.map((element) => {
+            return element.replace(escapeStringRegEx, '$1');
+        });
+        const stringItem = escapeItem.join('\n');
         for (let i = 0; i < repeat; i++) {
             this.items.push(stringItem);
         }
@@ -157,7 +173,7 @@ interface LIRPExecMacroInterface {
 interface LIRPNoteInterface {
     noteName: string;
     description: string;
-    loadFromNote(noteName: string, noteContent: string): boolean;
+    loadFromNote(noteName: string, noteContent: string, nullValue: string, escapeString: string): boolean;
     getNoteSuggestion(): LIRPSuggestionInterface[];
     pickRandomItemFromList(listTitle: string, macroRecursion: number): string; 
     getError(): string[];
@@ -179,7 +195,7 @@ class LIRPNote implements LIRPNoteInterface {
         this.warning = [];
     }
 
-    loadFromNote(noteName: string, noteContent: string): boolean {
+    loadFromNote(noteName: string, noteContent: string, nullValue: string, escapeString: string): boolean {
         this.noteName = noteName;
         const lines = noteContent.split('\n');
         const headingRegex = /^# .+$/;
@@ -196,9 +212,9 @@ class LIRPNote implements LIRPNoteInterface {
         }
         const headingCount = headingIndexes.length
         for (let currentIndex = 0; currentIndex < (headingCount - 1); currentIndex++) {
-            this.list.push(new LIRPList(lines.slice(headingIndexes[currentIndex], headingIndexes[currentIndex + 1])));
+            this.list.push(new LIRPList(lines.slice(headingIndexes[currentIndex], headingIndexes[currentIndex + 1]), nullValue, escapeString));
         }
-        this.list.push(new LIRPList(lines.slice(headingIndexes[headingCount - 1])));
+        this.list.push(new LIRPList(lines.slice(headingIndexes[headingCount - 1]), nullValue, escapeString));
         return true
     }
 
@@ -345,7 +361,7 @@ export default class ListItemRandomPicker extends Plugin {
         const content = await this.app.vault.cachedRead(file);
         const currentLIRP = new LIRPNote();
 
-        const loadSuccess = currentLIRP.loadFromNote(this.settings.notePath, content);
+        const loadSuccess = currentLIRP.loadFromNote(this.settings.notePath, content, this.settings.nullValue, this.settings.escapeValue);
         if (!loadSuccess) {
             currentLIRP.getError().forEach((element) => new Notice(element));
             return
@@ -455,7 +471,31 @@ class LIRPSettingTab extends PluginSettingTab {
                     await this.plugin.saveSettings();
                     })
             );
-        
+
+        new Setting(containerEl)
+            .setName('Null value')
+            .setDesc('If the first line of an item has this value, the line is flush.')
+            .addText(text => text
+                .setPlaceholder('Enter value')
+                .setValue(this.plugin.settings.nullValue)
+                .onChange(async (value) => {
+                    this.plugin.settings.nullValue = value;
+                    await this.plugin.saveSettings();
+                })
+            );
+
+        new Setting(containerEl)
+            .setName('Escape value')
+            .setDesc('If you want some headin one or first level list item in your item, you could escape them with these value')
+            .addText(text => text
+                .setPlaceholder('Enter value')
+                .setValue(this.plugin.settings.escapeValue)
+                .onChange(async (value) => {
+                    this.plugin.settings.escapeValue = value;
+                    await this.plugin.saveSettings();
+                })
+            );
+
         new Setting(containerEl)
             .setName('Selection value for notification')
             .setDesc('If the text selected has this value, the item is not inserted, but notified !')
