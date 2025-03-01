@@ -1,9 +1,0 @@
-{
-  "notePath": "test/Tables2",
-  "showWarning": true,
-  "maxMacroDepth": 10,
-  "selectionForNotification": "!",
-  "deleteSelectionForNotification": true,
-  "nullValue": "null",
-  "escapeValue": "//"
-}
