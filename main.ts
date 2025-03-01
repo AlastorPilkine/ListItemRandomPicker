@@ -38,7 +38,7 @@ interface LIRPListInterface {
     title: string;
     description: string;
     items: string[];
-    getListSuggestion(): LIRPSuggestionInterface;
+    getSuggestion(noteName: string): LIRPSuggestionInterface;
     notHidden(): boolean;
     pickRandomItem(): string;
     getWarning(): string[];
@@ -49,7 +49,9 @@ class LIRPList implements LIRPListInterface {
     description: string;
     hidden: boolean;
     items: string[];
-    warning: string[]
+    warning: string[];
+    nullValue: string;
+    escapeString: string;
 
     constructor(lines: string[], nullValue: string, escapeString: string) {
         this.title = "";
@@ -57,6 +59,8 @@ class LIRPList implements LIRPListInterface {
         this.hidden = false;
         this.items = [];
         this.warning = [];
+        this.nullValue = nullValue;
+        this.escapeString = escapeString;
 
         const headingRegEx = /^# +(.+)$/;
         this.title = lines[0].replace(headingRegEx, "$1");
@@ -100,7 +104,7 @@ class LIRPList implements LIRPListInterface {
         let item: string[];
         for (let currentIndex = 0; currentIndex < (listBeginCount - 1); currentIndex++) {
             item = (cleanLines.slice(listBeginIndexes[currentIndex], listBeginIndexes[currentIndex + 1]));
-            this.pushItemBasedOnWeight(item, nullValue, escapeString);
+            this.pushItemBasedOnWeight(item);
         }
         item = (cleanLines.slice(listBeginIndexes[listBeginCount - 1]));
         // taking care of MD022
@@ -108,10 +112,10 @@ class LIRPList implements LIRPListInterface {
         if (item.at(-1) === "") {
             item.pop();
         }
-        this.pushItemBasedOnWeight(item, nullValue, escapeString);
+        this.pushItemBasedOnWeight(item);
     }
 
-    pushItemBasedOnWeight(item: string[], nullValue: string, escapeString: string) : void {
+    pushItemBasedOnWeight(item: string[]) : void {
         const ItemWithWeightRegEx = /^\((\d+)\)\s+(.+)$/;
         let regExExecution;
         let repeat: number;
@@ -121,14 +125,14 @@ class LIRPList implements LIRPListInterface {
         } else {
             repeat = 1;
         }
-        if (item[0] === nullValue) {
+        if (item[0] === this.nullValue) {
             if (item.length === 1) {
                 item[0] = "";
             } else {
                 item.shift()
             };
         };
-        const stringRegex = `^ *${escapeString}(.*)`;
+        const stringRegex = `^ *${this.escapeString}(.*)`;
         const escapeStringRegEx = new RegExp(stringRegex, 'gm');
         const escapeItem = item.map((element) => {
             return element.replace(escapeStringRegEx, '$1');
@@ -139,8 +143,9 @@ class LIRPList implements LIRPListInterface {
         }
     };
 
-    getListSuggestion(): LIRPSuggestionInterface {
+    getSuggestion(noteName: string): LIRPSuggestionInterface {
         const suggestion = {
+            noteName: noteName,
             title: this.title,
             description: (this.description.split('\n')[0]),
         }
@@ -171,10 +176,8 @@ interface LIRPExecMacroInterface {
 }
 
 interface LIRPNoteInterface {
-    noteName: string;
-    description: string;
-    loadFromNote(noteName: string, noteContent: string, nullValue: string, escapeString: string): boolean;
-    getNoteSuggestion(): LIRPSuggestionInterface[];
+    loadFromNote(noteName: string, noteContent: string): boolean;
+    getListSuggestion(): LIRPSuggestionInterface[];
     pickRandomItemFromList(listTitle: string, macroRecursion: number): string; 
     getError(): string[];
     getWarning(): string[];
@@ -186,16 +189,20 @@ class LIRPNote implements LIRPNoteInterface {
     list: LIRPList[];
     error: string[];
     warning: string[];
+    nullValue: string;
+    escapeString: string;
 
-    constructor () {
+    constructor (nullValue: string, escapeString: string) {
         this.noteName = "";
         this.description = "";
         this.list = [];
         this.error = [];
         this.warning = [];
+        this.nullValue = nullValue;
+        this.escapeString = escapeString;
     }
 
-    loadFromNote(noteName: string, noteContent: string, nullValue: string, escapeString: string): boolean {
+    loadFromNote(noteName: string, noteContent: string, ): boolean {
         this.noteName = noteName;
         const lines = noteContent.split('\n');
         const headingRegex = /^# .+$/;
@@ -212,18 +219,18 @@ class LIRPNote implements LIRPNoteInterface {
         }
         const headingCount = headingIndexes.length
         for (let currentIndex = 0; currentIndex < (headingCount - 1); currentIndex++) {
-            this.list.push(new LIRPList(lines.slice(headingIndexes[currentIndex], headingIndexes[currentIndex + 1]), nullValue, escapeString));
+            this.list.push(new LIRPList(lines.slice(headingIndexes[currentIndex], headingIndexes[currentIndex + 1]), this.nullValue, this.escapeString));
         }
-        this.list.push(new LIRPList(lines.slice(headingIndexes[headingCount - 1]), nullValue, escapeString));
+        this.list.push(new LIRPList(lines.slice(headingIndexes[headingCount - 1]), this.nullValue, this.escapeString));
         return true
     }
 
-    getNoteSuggestion(): LIRPSuggestionInterface[] {
+    getListSuggestion(): LIRPSuggestionInterface[] {
         let noteSuggestion: LIRPSuggestionInterface[];
         noteSuggestion = [];
         this.list.forEach((element) => {
             if (element.notHidden()) {
-                noteSuggestion.push(element.getListSuggestion());
+                noteSuggestion.push(element.getSuggestion(this.noteName));
             }
         });
         return noteSuggestion;
@@ -289,11 +296,104 @@ class LIRPNote implements LIRPNoteInterface {
     };
 
 }
+
+class LIRPMultiNote implements LIRPNoteInterface {
+    multiNote: LIRPNote[];
+    nullValue: string;
+    escapeString: string;
+    noteSelected: LIRPNote|undefined;
+
+    constructor (nullValue: string, escapeString: string) {
+        this.multiNote = [];
+        this.nullValue = nullValue;
+        this.escapeString = escapeString;
+        this.noteSelected = undefined;
+    };
+
+    selectNote(noteName: string): boolean {
+        this.noteSelected = this.multiNote.find((element) => element.noteName === noteName);
+        return (this.noteSelected !== undefined);
+    };
+
+    loadFromNote(noteName: string, noteContent: string): boolean {
+        const currentNote = new LIRPNote(this.nullValue, this.escapeString);
+        const status = currentNote.loadFromNote(noteName, noteContent);
+        this.multiNote.push(currentNote);
+        return status;
+    };
+
+    getListSuggestion(): LIRPSuggestionInterface[] {
+        if (this.noteSelected !== undefined) {
+            return this.noteSelected.getListSuggestion();
+        } else {
+            let allListSuggestion: LIRPSuggestionInterface[] = [];
+            this.multiNote.map((element) => {
+                allListSuggestion = allListSuggestion.concat(element.getListSuggestion())
+            });
+            return allListSuggestion;
+        }
+    };
+
+    getNoteSuggestion(): LIRPSuggestionInterface[] {
+        let noteSuggestion: LIRPSuggestionInterface[] = [];
+        this.multiNote.map((element) => {
+            noteSuggestion.push({
+                noteName: element.noteName,
+                title: '',
+                description: (element.description.split('\n')[0]),
+            });
+        });
+        return noteSuggestion;
+    };
+    
+    pickRandomItemFromList(listTitle: string, macroRecursion: number): string {
+        if (this.noteSelected !== undefined) {
+            return this.noteSelected.pickRandomItemFromList(listTitle, macroRecursion);
+        } else {
+            return "";
+        }
+    }; 
+
+    pickRandomWithCrossNoteMacro(listTitle: string, macroRecursion: number): string {
+        let superNote = new LIRPNote(this.nullValue, this.escapeString);
+        this.multiNote.map((element) => {
+            superNote.list = superNote.list.concat(element.list);
+        });
+        return superNote.pickRandomItemFromList(listTitle, macroRecursion);
+    };
+
+    getError(): string[] {
+        if (this.noteSelected !== undefined) {
+            return this.noteSelected.getError();
+        } else {
+            let allError:string[] = [];
+            this.multiNote.map((element) => {
+                allError = allError.concat(element.getError());
+            });
+            return allError;
+        }
+    };
+
+    getWarning(): string[] {
+        if (this.noteSelected !== undefined) {
+            return this.noteSelected.getWarning();
+        } else {
+            let allWarning:string[] = [];
+            this.multiNote.map((element) => {
+                allWarning = allWarning.concat(element.getError());
+            });
+            return allWarning;
+        }
+    };
+
+
+};
+
 interface LIRPSuggestionInterface {
+    noteName: string;
     title: string;
     description: string;
 }
-
 
 export class LIRPSuggestModal extends SuggestModal<LIRPSuggestionInterface> {
     items: LIRPSuggestionInterface[];
@@ -359,9 +459,9 @@ export default class ListItemRandomPicker extends Plugin {
         }
 
         const content = await this.app.vault.cachedRead(file);
-        const currentLIRP = new LIRPNote();
+        const currentLIRP = new LIRPNote(this.settings.nullValue, this.settings.escapeValue);
 
-        const loadSuccess = currentLIRP.loadFromNote(this.settings.notePath, content, this.settings.nullValue, this.settings.escapeValue);
+        const loadSuccess = currentLIRP.loadFromNote(this.settings.notePath, content);
         if (!loadSuccess) {
             currentLIRP.getError().forEach((element) => new Notice(element));
             return
@@ -371,7 +471,7 @@ export default class ListItemRandomPicker extends Plugin {
                 new Notice(element);
             });
         };
-        new LIRPSuggestModal(this.app, currentLIRP.getNoteSuggestion(), (title) => {
+        new LIRPSuggestModal(this.app, currentLIRP.getListSuggestion(), (title) => {
             this.workWithTitle(currentLIRP, title);
         }).open();
     }
