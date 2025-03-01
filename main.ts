@@ -183,9 +183,8 @@ class LIRPNote implements LIRPNoteInterface {
             // Due to split on '\n', the slice, and at least a join on '\n' the last '\n' is always lost !
             this.description = lines.slice(0, headingIndexes[0]).join('\n');
         }
-        headingIndexes = findIndexes(lines, (element) => headingRegex.test(element));
         const headingCount = headingIndexes.length
-        for (let currentIndex = headingIndexes[0]; currentIndex < (headingCount - 1); currentIndex++) {
+        for (let currentIndex = 0; currentIndex < (headingCount - 1); currentIndex++) {
             this.list.push(new LIRPList(lines.slice(headingIndexes[currentIndex], headingIndexes[currentIndex + 1])));
         }
         this.list.push(new LIRPList(lines.slice(headingIndexes[headingCount - 1])));
