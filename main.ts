@@ -38,6 +38,97 @@ const DEFAULT_SETTINGS: LIRPPluginSettings = {
     allowCrossNoteReference: false,
 };
 
+//-----------------------------------------------------------------
+class DiceRoller {
+    checkDice(diceString: string): boolean {
+      const diceRegex = /^(\d+)?d(\d+)([\+\-]\d+)?(e)?(k\d+)?(kl\d+)?$/i;
+      return diceRegex.test(diceString);
+    }
+  
+    rollDice(diceString: string): number {
+      if (!this.checkDice(diceString)) {
+        throw new Error("Syntaxe de lancer de dés invalide.");
+      }
+  
+      const [_, countStr, sidesStr, modifierStr, explodeStr, keepStr, keepLowStr] =
+        diceString.match(
+          /^(\d+)?d(\d+)([\+\-]\d+)?(e)?(k\d+)?(kl\d+)?$/i
+        ) as RegExpMatchArray;
+  
+      const count = parseInt(countStr || "1");
+      const sides = parseInt(sidesStr);
+      const modifier = parseInt(modifierStr || "0");
+      const explode = !!explodeStr;
+      const keep = keepStr ? parseInt(keepStr.slice(1)) : undefined;
+      const keepLow = keepLowStr ? parseInt(keepLowStr.slice(2)) : undefined;
+  
+      let results: number[] = [];
+      for (let i = 0; i < count; i++) {
+        let result = Math.floor(Math.random() * sides) + 1;
+        results.push(result);
+  
+        if (explode) {
+          while (result === sides) {
+            result = Math.floor(Math.random() * sides) + 1;
+            results.push(result);
+          }
+        }
+      }
+  
+      if (keep) {
+        results.sort((a, b) => b - a);
+        results = results.slice(0, keep);
+      } else if (keepLow) {
+        results.sort((a, b) => a - b);
+        results = results.slice(0, keepLow);
+      }
+  
+      const sum = results.reduce((acc, val) => acc + val, 0);
+      return sum + modifier;
+    }
+  
+    /**
+     * Remplace les lancers de dés encadrés par des délimiteurs dans une chaîne multi-lignes.
+     *
+     * @param {string} text Le texte multi-lignes contenant les lancers de dés.
+     * @param {string} startDelimiter Le délimiteur de début des lancers de dés.
+     * @param {string} endDelimiter Le délimiteur de fin des lancers de dés.
+     * @returns {string} Le texte avec les lancers de dés remplacés par leurs résultats.
+     */
+    replaceDiceRolls(
+      text: string,
+      startDelimiter: string,
+      endDelimiter: string
+    ): string {
+      const regex = new RegExp(
+        `${this.escapeRegExp(startDelimiter)}([^${this.escapeRegExp(
+          startDelimiter + endDelimiter
+        )}]+)${this.escapeRegExp(endDelimiter)}`,
+        "g"
+      );
+  
+      return text.replace(regex, (match, diceString) => {
+        try {
+          const result = this.rollDice(diceString);
+          return result.toString();
+        } catch (error) {
+          return match; // Si la syntaxe est invalide, on garde le texte d'origine
+        }
+      });
+    }
+  
+    /**
+     * Échappe les caractères spéciaux pour une utilisation dans une expression régulière.
+     *
+     * @param {string} string La chaîne de caractères à échapper.
+     * @returns {string} La chaîne de caractères échappée.
+     */
+    private escapeRegExp(string: string): string {
+      return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    }
+  }
+//-----------------------------------------------------------------
+
 interface LIRPListInterface {
     title: string;
     description: string;
@@ -182,7 +273,7 @@ interface LIRPExecMacroInterface {
 interface LIRPNoteInterface {
     loadFromNote(noteName: string, noteContent: string): boolean;
     getListSuggestion(): LIRPSuggestionInterface[];
-    pickRandomItemFromList(listTitle: string, macroRecursion: number): string; 
+    pickRandomItemFromList(listTitle: string, workOnReference: boolean): string; 
     getError(): string[];
     getWarning(): string[];
     [key: string]: any;
@@ -196,8 +287,10 @@ class LIRPNote implements LIRPNoteInterface {
     warning: string[];
     nullValue: string;
     escapeString: string;
+    rollDice: boolean;
+    referenceMaxDepth: number;
 
-    constructor (nullValue: string, escapeString: string) {
+    constructor (nullValue: string, escapeString: string, referenceMaxDepth: number) {
         this.noteName = "";
         this.description = "";
         this.list = [];
@@ -205,6 +298,8 @@ class LIRPNote implements LIRPNoteInterface {
         this.warning = [];
         this.nullValue = nullValue;
         this.escapeString = escapeString;
+        this.rollDice = true;
+        this.referenceMaxDepth = referenceMaxDepth;
     }
 
     loadFromNote(noteName: string, noteContent: string, ): boolean {
@@ -241,14 +336,14 @@ class LIRPNote implements LIRPNoteInterface {
         return noteSuggestion;
     }
 
-    execMacroSubstitution(item: string, macroRecursion: number): LIRPExecMacroInterface {
+    execMacroSubstitution(item: string): LIRPExecMacroInterface {
         const stringMacroRefRegex: string = `\{(${this.list.map((element) => escapeRegex(element.title)).join('|')})\}`;
         const macroRefRegex = new RegExp (stringMacroRefRegex,'mg');
         let match;
         let modifiedItem:string = item;
         let listTitle:string = "";
         while ((match = macroRefRegex.exec(modifiedItem)) !== null) {
-            let newValue: string = this.pickRandomItemFromList(match[1], -1); 
+            let newValue: string = this.pickRandomItemFromList(match[1], false); 
             listTitle = match[0];
             modifiedItem = modifiedItem.replace(listTitle, newValue);
             macroRefRegex.lastIndex = match.index + newValue.length;
@@ -259,7 +354,7 @@ class LIRPNote implements LIRPNoteInterface {
         };
     }
 
-    pickRandomItemFromList(listTitle: string, macroRecursion: number): string {
+    pickRandomItemFromList(listTitle: string, workOnReference: boolean = true): string {
         let randomItem: string = "";
         let returnOfExecMacro: LIRPExecMacroInterface = {
             lastListTitle: listTitle,
@@ -268,17 +363,22 @@ class LIRPNote implements LIRPNoteInterface {
         const currentList = this.list.find((element) => element.title === listTitle);
         if (currentList !== undefined) {
             randomItem = currentList.pickRandomItem();
-            for (let repeat = 0; repeat < macroRecursion; repeat++) {
-                returnOfExecMacro = this.execMacroSubstitution(randomItem, macroRecursion);
+            for (let repeat = 0; repeat < this.referenceMaxDepth; repeat++) {
+                returnOfExecMacro = this.execMacroSubstitution(randomItem);
                 randomItem = returnOfExecMacro.modifiedItem;
             }
         }
-        const stringMacroRefRegex: string = `\{(${this.list.map((element) => element.title).join('|')})\}`;
+        const stringMacroRefRegex: string = `\{(${this.list.map((element) => escapeRegex(element.title)).join('|')})\}`;
         const macroRefRegex = new RegExp (stringMacroRefRegex);
-        if (macroRefRegex.test(randomItem) && macroRecursion !== -1) {
+        if (macroRefRegex.test(randomItem) && workOnReference) {
             new Notice(`Macro depth limit reached in note "${this.noteName}" after calling "${returnOfExecMacro.lastListTitle}"`);
         };
-        return randomItem;
+        if (workOnReference && this.rollDice) {
+            const diceRoller = new DiceRoller();
+            return diceRoller.replaceDiceRolls(randomItem,'{','}');
+        } else {
+            return randomItem;
+        }
     } 
 
     getError(): string[] {
@@ -312,12 +412,15 @@ class LIRPMultiNote implements LIRPNoteInterface {
     nullValue: string;
     escapeString: string;
     noteSelected: LIRPNote|undefined;
+    referenceMaxDepth: number;
 
-    constructor (nullValue: string, escapeString: string) {
+
+    constructor (nullValue: string, escapeString: string, referenceMaxDepth: number) {
         this.multiNote = [];
         this.nullValue = nullValue;
         this.escapeString = escapeString;
         this.noteSelected = undefined;
+        this.referenceMaxDepth = referenceMaxDepth;
     };
 
     selectNote(noteName: string): boolean {
@@ -331,7 +434,7 @@ class LIRPMultiNote implements LIRPNoteInterface {
     };
 
     loadFromNote(noteName: string, noteContent: string): boolean {
-        const currentNote = new LIRPNote(this.nullValue, this.escapeString);
+        const currentNote = new LIRPNote(this.nullValue, this.escapeString, this.referenceMaxDepth);
         const status = currentNote.loadFromNote(noteName, noteContent);
         this.multiNote.push(currentNote);
         return status;
@@ -363,20 +466,20 @@ class LIRPMultiNote implements LIRPNoteInterface {
         return noteSuggestion;
     };
     
-    pickRandomItemFromList(listTitle: string, macroRecursion: number): string {
+    pickRandomItemFromList(listTitle: string, workOnReference: boolean = true): string {
         if (this.noteSelected !== undefined) {
-            return this.noteSelected.pickRandomItemFromList(listTitle, macroRecursion);
+            return this.noteSelected.pickRandomItemFromList(listTitle);
         } else {
             return "";
         }
     }; 
 
-    pickRandomWithCrossNoteMacro(listTitle: string, macroRecursion: number): string {
-        let superNote = new LIRPNote(this.nullValue, this.escapeString);
+    pickRandomWithCrossNoteMacro(listTitle: string, workOnReference: boolean = true): string {
+        let superNote = new LIRPNote(this.nullValue, this.escapeString, this.referenceMaxDepth);
         this.multiNote.map((element) => {
             superNote.list = superNote.list.concat(element.list);
         });
-        return superNote.pickRandomItemFromList(listTitle, macroRecursion);
+        return superNote.pickRandomItemFromList(listTitle);
     };
 
     getError(): string[] {
@@ -467,7 +570,7 @@ export default class ListItemRandomPicker extends Plugin {
 
     async doTheJob(): Promise<void> {
         const allLIRPFiles = this.getLIRPFiles(this.settings.notePath);
-        let currentLIRP = new LIRPMultiNote(this.settings.nullValue, this.settings.escapeValue);
+        let currentLIRP = new LIRPMultiNote(this.settings.nullValue, this.settings.escapeValue, this.settings.maxMacroDepth);
         let loadWithoutError:boolean = true;
 
         for (const currentFile of allLIRPFiles) {
@@ -546,7 +649,7 @@ export default class ListItemRandomPicker extends Plugin {
             const selection = editor.getSelection();
 
             if (noticeRegex.test(selection)) {
-                new Notice(Note[PickMethod](listTitle, this.settings.maxMacroDepth));
+                new Notice(Note[PickMethod](listTitle));
                 if (this.settings.deleteSelectionForNotification) {
                     editor.replaceSelection('');
                 }
@@ -560,11 +663,11 @@ export default class ListItemRandomPicker extends Plugin {
                     const delimiter = selection.replace(/^\d+/, '');
                     const arrayStringToinsert: string[] = [];
                     for (let i = 0; i < repeat; i++) {
-                        arrayStringToinsert.push(Note[PickMethod](listTitle, this.settings.maxMacroDepth));
+                        arrayStringToinsert.push(Note[PickMethod](listTitle));
                     }
                     stringToInsert = arrayStringToinsert.join(delimiter);
                 } else {
-                    stringToInsert = Note[PickMethod](listTitle, this.settings.maxMacroDepth);
+                    stringToInsert = Note[PickMethod](listTitle);
                 }
                 editor.replaceSelection(stringToInsert);
             };
