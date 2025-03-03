@@ -23,7 +23,6 @@ interface LIRPPluginSettings {
     nullValue: string;
     escapeValue: string;
     showNoteSelector: boolean;
-    allowCrossNoteReference: boolean;
 }
 
 const DEFAULT_SETTINGS: LIRPPluginSettings = {
@@ -35,7 +34,6 @@ const DEFAULT_SETTINGS: LIRPPluginSettings = {
     nullValue: 'null',
     escapeValue: '//',
     showNoteSelector: true,
-    allowCrossNoteReference: false,
 };
 
 //-----------------------------------------------------------------
@@ -272,7 +270,7 @@ interface LIRPExecMacroInterface {
 
 interface LIRPNoteInterface {
     loadFromNote(noteName: string, noteContent: string): boolean;
-    getListSuggestion(): LIRPSuggestionInterface[];
+    getListSuggestion(withHidden: boolean): LIRPSuggestionInterface[];
     pickRandomItemFromList(listTitle: string, workOnReference: boolean): string; 
     getError(): string[];
     getWarning(): string[];
@@ -302,6 +300,14 @@ class LIRPNote implements LIRPNoteInterface {
         this.referenceMaxDepth = referenceMaxDepth;
     }
 
+    getListTitles() : string[] {
+        let listTitles:string[] = [];
+        this.list.map((element) => {
+            listTitles.push(element.title);
+        });
+        return listTitles;
+    };
+
     loadFromNote(noteName: string, noteContent: string, ): boolean {
         this.noteName = noteName;
         const lines = noteContent.split('\n');
@@ -319,24 +325,29 @@ class LIRPNote implements LIRPNoteInterface {
         }
         const headingCount = headingIndexes.length
         for (let currentIndex = 0; currentIndex < (headingCount - 1); currentIndex++) {
-            this.list.push(new LIRPList(lines.slice(headingIndexes[currentIndex], headingIndexes[currentIndex + 1]), this.nullValue, this.escapeString));
+            const currentList = new LIRPList(lines.slice(headingIndexes[currentIndex], headingIndexes[currentIndex + 1]), this.nullValue, this.escapeString);
+            if (this.getListTitles().contains(currentList.title)) {
+                this.warning.push(`A list named "${currentList.title}" already exists in notes "${noteName}, ignoring"`);
+            } else {
+                this.list.push(currentList);
+            };
         }
         this.list.push(new LIRPList(lines.slice(headingIndexes[headingCount - 1]), this.nullValue, this.escapeString));
         return true
     }
 
-    getListSuggestion(): LIRPSuggestionInterface[] {
+    getListSuggestion(withHidden: boolean = false): LIRPSuggestionInterface[] {
         let noteSuggestion: LIRPSuggestionInterface[];
         noteSuggestion = [];
         this.list.forEach((element) => {
-            if (element.notHidden()) {
+            if (withHidden || element.notHidden()) {
                 noteSuggestion.push(element.getSuggestion(this.noteName));
             }
         });
         return noteSuggestion;
     }
 
-    execMacroSubstitution(item: string): LIRPExecMacroInterface {
+    execReferenceSubstitution(item: string): LIRPExecMacroInterface {
         const stringMacroRefRegex: string = `\{(${this.list.map((element) => escapeRegex(element.title)).join('|')})\}`;
         const macroRefRegex = new RegExp (stringMacroRefRegex,'mg');
         let match;
@@ -364,7 +375,7 @@ class LIRPNote implements LIRPNoteInterface {
         if (currentList !== undefined) {
             randomItem = currentList.pickRandomItem();
             for (let repeat = 0; repeat < this.referenceMaxDepth; repeat++) {
-                returnOfExecMacro = this.execMacroSubstitution(randomItem);
+                returnOfExecMacro = this.execReferenceSubstitution(randomItem);
                 randomItem = returnOfExecMacro.modifiedItem;
             }
         }
@@ -403,8 +414,6 @@ class LIRPNote implements LIRPNoteInterface {
     get length(): number {
         return this.list.length;
     };
-
-
 }
 
 class LIRPMultiNote implements LIRPNoteInterface {
@@ -419,19 +428,19 @@ class LIRPMultiNote implements LIRPNoteInterface {
         this.multiNote = [];
         this.nullValue = nullValue;
         this.escapeString = escapeString;
-        this.noteSelected = undefined;
+        // this.noteSelected = undefined;
         this.referenceMaxDepth = referenceMaxDepth;
     };
 
-    selectNote(noteName: string): boolean {
-        if (noteName === '' && this.multiNote.length > 1) {
-            this.noteSelected =this.multiNote[0];
-            return true;
-        } else {
-            this.noteSelected = this.multiNote.find((element) => element.noteName === noteName);
-            return (this.noteSelected !== undefined);
-        }
-    };
+    // selectNote(noteName: string): boolean {
+    //     if (noteName === '' && this.multiNote.length > 1) {
+    //         this.noteSelected =this.multiNote[0];
+    //         return true;
+    //     } else {
+    //         this.noteSelected = this.multiNote.find((element) => element.noteName === noteName);
+    //         return (this.noteSelected !== undefined);
+    //     }
+    // };
 
     loadFromNote(noteName: string, noteContent: string): boolean {
         const currentNote = new LIRPNote(this.nullValue, this.escapeString, this.referenceMaxDepth);
@@ -440,9 +449,18 @@ class LIRPMultiNote implements LIRPNoteInterface {
         return status;
     };
 
-    getListSuggestion(): LIRPSuggestionInterface[] {
-        if (this.noteSelected !== undefined) {
-            return this.noteSelected.getListSuggestion();
+    getNoteByName (noteName: string): LIRPNote|undefined {
+        return this.multiNote.find((element) => element.noteName === noteName);
+    };
+
+    getListSuggestion(withHidden: boolean = false, noteName: string = ''): LIRPSuggestionInterface[] {
+        if (noteName !== '') {
+            const currentNote = this.getNoteByName(noteName);
+            if (currentNote !== undefined) {
+                return currentNote.getListSuggestion();
+            } else {
+                return [];
+            }
         } else {
             let allListSuggestion: LIRPSuggestionInterface[] = [];
             this.multiNote.map((element) => {
@@ -466,15 +484,15 @@ class LIRPMultiNote implements LIRPNoteInterface {
         return noteSuggestion;
     };
     
-    pickRandomItemFromList(listTitle: string, workOnReference: boolean = true): string {
-        if (this.noteSelected !== undefined) {
-            return this.noteSelected.pickRandomItemFromList(listTitle);
-        } else {
-            return "";
-        }
-    }; 
+    // pickRandomItemFromList(listTitle: string, workOnReference: boolean = true): string {
+    //     if (this.noteSelected !== undefined) {
+    //         return this.noteSelected.pickRandomItemFromList(listTitle);
+    //     } else {
+    //         return "";
+    //     }
+    // }; 
 
-    pickRandomWithCrossNoteMacro(listTitle: string, workOnReference: boolean = true): string {
+    pickRandomItemFromList(listTitle: string, workOnReference: boolean = true): string {
         let superNote = new LIRPNote(this.nullValue, this.escapeString, this.referenceMaxDepth);
         this.multiNote.map((element) => {
             superNote.list = superNote.list.concat(element.list);
@@ -598,21 +616,21 @@ export default class ListItemRandomPicker extends Plugin {
             new Notice('Error : check settings "Path " in plugin List Item Random Picker !');
             return;
         } else if (currentLIRP.length === 1) {
-            currentLIRP.selectNote('');
+            // currentLIRP.selectNote('');
             new LIRPSuggestModal(this.app, currentLIRP.getListSuggestion(), (item) => {
                 this.workWithTitle(currentLIRP, item.title);
             }).open();
         } else {
             if (this.settings.showNoteSelector) {
                 new LIRPSuggestModal(this.app, currentLIRP.getNoteSuggestion(), (item) => {
-                    currentLIRP.selectNote(item.title);
-                    new LIRPSuggestModal(this.app, currentLIRP.getListSuggestion(), (item) => {
+                    // currentLIRP.selectNote(item.title);
+                    new LIRPSuggestModal(this.app, currentLIRP.getListSuggestion(false, item.noteName), (item) => {
                         this.workWithTitle(currentLIRP, item.title);
                     }).open();
                 }).open();
             } else {
                 new LIRPSuggestModal(this.app, currentLIRP.getListSuggestion(), (item) => {
-                    currentLIRP.selectNote(item.noteName);
+                    // currentLIRP.selectNote(item.noteName);
                     this.workWithTitle(currentLIRP, item.title);
                 }).open();
             };
@@ -631,17 +649,10 @@ export default class ListItemRandomPicker extends Plugin {
         return filesInNotePath;
     };
 
-    workWithTitle(Note: LIRPNoteInterface, listTitle: string): void {
+    workWithTitle(Note: LIRPMultiNote, listTitle: string): void {
         const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
 
         if (activeView) {
-            let PickMethod:string = '';
-            if (this.settings.allowCrossNoteReference) {
-                PickMethod = "pickRandomWithCrossNoteMacro";
-            } else {
-                PickMethod = "pickRandomItemFromList";
-            };
-
             const selectionForNotificationRegex:string = `^${this.settings.selectionForNotification}$`;
             const noticeRegex = new RegExp(selectionForNotificationRegex);
     
@@ -649,7 +660,7 @@ export default class ListItemRandomPicker extends Plugin {
             const selection = editor.getSelection();
 
             if (noticeRegex.test(selection)) {
-                new Notice(Note[PickMethod](listTitle));
+                new Notice(Note.pickRandomItemFromList(listTitle));
                 if (this.settings.deleteSelectionForNotification) {
                     editor.replaceSelection('');
                 }
@@ -663,11 +674,11 @@ export default class ListItemRandomPicker extends Plugin {
                     const delimiter = selection.replace(/^\d+/, '');
                     const arrayStringToinsert: string[] = [];
                     for (let i = 0; i < repeat; i++) {
-                        arrayStringToinsert.push(Note[PickMethod](listTitle));
+                        arrayStringToinsert.push(Note.pickRandomItemFromList(listTitle));
                     }
                     stringToInsert = arrayStringToinsert.join(delimiter);
                 } else {
-                    stringToInsert = Note[PickMethod](listTitle);
+                    stringToInsert = Note.pickRandomItemFromList(listTitle);
                 }
                 editor.replaceSelection(stringToInsert);
             };
@@ -801,16 +812,5 @@ class LIRPSettingTab extends PluginSettingTab {
                         await this.plugin.saveSettings();
                         })
                 );
-    
-            new Setting(containerEl)
-                .setName('Allow cross note reference')
-                .setDesc('bla bla bla.')
-                .addToggle((toggle) => {
-                    toggle.setValue(this.plugin.settings.allowCrossNoteReference);
-                    toggle.onChange(async (value) => {
-                        this.plugin.settings.allowCrossNoteReference = value;
-                        await this.plugin.saveSettings();
-                    })
-                });
         }
 }
