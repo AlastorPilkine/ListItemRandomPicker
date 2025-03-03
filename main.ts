@@ -263,7 +263,7 @@ class LIRPList implements LIRPListInterface {
 
 }
 
-interface LIRPExecMacroInterface {
+interface LIRPExecRefSubInterface {
     lastListTitle: string;
     modifiedItem: string;
 }
@@ -324,16 +324,21 @@ class LIRPNote implements LIRPNoteInterface {
         }
         const headingCount = headingIndexes.length
         for (let currentIndex = 0; currentIndex < (headingCount - 1); currentIndex++) {
-            const currentList = new LIRPList(lines.slice(headingIndexes[currentIndex], headingIndexes[currentIndex + 1]), this.nullValue, this.escapeString);
-            if (this.getListTitles().contains(currentList.title)) {
-                this.warning.push(`A list named "${currentList.title}" already exists in notes "${noteName}, ignoring"`);
-            } else {
-                this.list.push(currentList);
-            };
-        }
-        this.list.push(new LIRPList(lines.slice(headingIndexes[headingCount - 1]), this.nullValue, this.escapeString));
+                this.pushListIfNotExists(new LIRPList(lines.slice(headingIndexes[currentIndex], headingIndexes[currentIndex + 1]), this.nullValue, this.escapeString));
+        };
+        this.pushListIfNotExists(new LIRPList(lines.slice(headingIndexes[headingCount - 1]), this.nullValue, this.escapeString));
         return true
-    }
+    };
+
+    pushListIfNotExists(listToPush: LIRPList): boolean {
+        if (this.getListTitles().contains(listToPush.title)) {
+            this.warning.push(`A list named "${listToPush.title}" already exists in notes "${this.noteName}, ignoring"`);
+            return false;
+        } else {
+            this.list.push(listToPush);
+            return true;
+        };
+    };
 
     getListSuggestion(withHidden: boolean = false): LIRPSuggestionList {
         const noteSuggestion = new LIRPSuggestionList();
@@ -345,7 +350,7 @@ class LIRPNote implements LIRPNoteInterface {
         return noteSuggestion;
     }
 
-    execReferenceSubstitution(item: string): LIRPExecMacroInterface {
+    execReferenceSubstitution(item: string): LIRPExecRefSubInterface {
         const stringMacroRefRegex: string = `\{(${this.list.map((element) => escapeRegex(element.title)).join('|')})\}`;
         const macroRefRegex = new RegExp (stringMacroRefRegex,'mg');
         let match;
@@ -365,7 +370,7 @@ class LIRPNote implements LIRPNoteInterface {
 
     pickRandomItemFromList(listTitle: string, workOnReference: boolean = true): string {
         let randomItem: string = "";
-        let returnOfExecMacro: LIRPExecMacroInterface = {
+        let returnOfExecMacro: LIRPExecRefSubInterface = {
             lastListTitle: listTitle,
             modifiedItem: "",
         };
@@ -420,25 +425,45 @@ class LIRPMultiNote implements LIRPNoteInterface {
     escapeString: string;
     noteSelected: LIRPNote|undefined;
     referenceMaxDepth: number;
+    warning: string[];
 
 
     constructor (nullValue: string, escapeString: string, referenceMaxDepth: number) {
         this.multiNote = [];
         this.nullValue = nullValue;
         this.escapeString = escapeString;
-        // this.noteSelected = undefined;
         this.referenceMaxDepth = referenceMaxDepth;
+        this.warning = [];
     };
 
     loadFromNote(noteName: string, noteContent: string): boolean {
         const currentNote = new LIRPNote(this.nullValue, this.escapeString, this.referenceMaxDepth);
         const status = currentNote.loadFromNote(noteName, noteContent);
-        this.multiNote.push(currentNote);
+        this.pushNoteIfListNotExists(currentNote);
         return status;
     };
 
-    getNoteByName (noteName: string): LIRPNote|undefined {
-        return this.multiNote.find((element) => element.noteName === noteName);
+    pushNoteIfListNotExists(noteToPush: LIRPNote): boolean {
+        const allListTitle = this.getListTitles();
+        let unic:boolean = true;
+        noteToPush.getListTitles().map((element) => {
+            if (allListTitle.contains(element)) {
+                this.warning.push(`Warning, duplicate List "${element}" found in note "${noteToPush.noteName}"`);
+                unic = false;
+            }
+        });
+        if (unic) {
+            this.multiNote.push(noteToPush);
+        };
+        return unic;
+    };
+    
+    getListTitles() : string[] {
+        let listTitles:string[] = [];
+        this.multiNote.map((element) => {
+            listTitles = listTitles.concat(element.getListTitles());
+        });
+        return listTitles;
     };
 
     getListSuggestion(withHidden: boolean = false): LIRPSuggestionList {
@@ -472,27 +497,19 @@ class LIRPMultiNote implements LIRPNoteInterface {
     };
 
     getError(): string[] {
-        if (this.noteSelected !== undefined) {
-            return this.noteSelected.getError();
-        } else {
-            let allError:string[] = [];
-            this.multiNote.map((element) => {
-                allError = allError.concat(element.getError());
-            });
-            return allError;
-        }
+        let allError:string[] = [];
+        this.multiNote.map((element) => {
+            allError = allError.concat(element.getError());
+        });
+        return allError;
     };
 
     getWarning(): string[] {
-        if (this.noteSelected !== undefined) {
-            return this.noteSelected.getWarning();
-        } else {
-            let allWarning:string[] = [];
-            this.multiNote.map((element) => {
-                allWarning = allWarning.concat(element.getWarning());
-            });
-            return allWarning;
-        }
+        let allWarning:string[] = this.warning;
+        this.multiNote.map((element) => {
+            allWarning = allWarning.concat(element.getWarning());
+        });
+        return allWarning;
     };
 
     get length(): number {
