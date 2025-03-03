@@ -270,11 +270,10 @@ interface LIRPExecMacroInterface {
 
 interface LIRPNoteInterface {
     loadFromNote(noteName: string, noteContent: string): boolean;
-    getListSuggestion(withHidden: boolean): LIRPSuggestionInterface[];
+    getListSuggestion(): LIRPSuggestionList;
     pickRandomItemFromList(listTitle: string, workOnReference: boolean): string; 
     getError(): string[];
     getWarning(): string[];
-    [key: string]: any;
 }
 
 class LIRPNote implements LIRPNoteInterface {
@@ -336,9 +335,8 @@ class LIRPNote implements LIRPNoteInterface {
         return true
     }
 
-    getListSuggestion(withHidden: boolean = false): LIRPSuggestionInterface[] {
-        let noteSuggestion: LIRPSuggestionInterface[];
-        noteSuggestion = [];
+    getListSuggestion(withHidden: boolean = false): LIRPSuggestionList {
+        const noteSuggestion = new LIRPSuggestionList();
         this.list.forEach((element) => {
             if (withHidden || element.notHidden()) {
                 noteSuggestion.push(element.getSuggestion(this.noteName));
@@ -432,16 +430,6 @@ class LIRPMultiNote implements LIRPNoteInterface {
         this.referenceMaxDepth = referenceMaxDepth;
     };
 
-    // selectNote(noteName: string): boolean {
-    //     if (noteName === '' && this.multiNote.length > 1) {
-    //         this.noteSelected =this.multiNote[0];
-    //         return true;
-    //     } else {
-    //         this.noteSelected = this.multiNote.find((element) => element.noteName === noteName);
-    //         return (this.noteSelected !== undefined);
-    //     }
-    // };
-
     loadFromNote(noteName: string, noteContent: string): boolean {
         const currentNote = new LIRPNote(this.nullValue, this.escapeString, this.referenceMaxDepth);
         const status = currentNote.loadFromNote(noteName, noteContent);
@@ -453,27 +441,18 @@ class LIRPMultiNote implements LIRPNoteInterface {
         return this.multiNote.find((element) => element.noteName === noteName);
     };
 
-    getListSuggestion(withHidden: boolean = false, noteName: string = ''): LIRPSuggestionInterface[] {
-        if (noteName !== '') {
-            const currentNote = this.getNoteByName(noteName);
-            if (currentNote !== undefined) {
-                return currentNote.getListSuggestion();
-            } else {
-                return [];
-            }
-        } else {
-            let allListSuggestion: LIRPSuggestionInterface[] = [];
-            this.multiNote.map((element) => {
-                allListSuggestion = allListSuggestion.concat(element.getListSuggestion())
-            });
-            return allListSuggestion;
-        }
+    getListSuggestion(withHidden: boolean = false): LIRPSuggestionList {
+        let allListSuggestion = new LIRPSuggestionList();
+        this.multiNote.map((element) => {
+            allListSuggestion = allListSuggestion.concat(element.getListSuggestion())
+        });
+        return allListSuggestion;
     };
 
-    getNoteSuggestion(): LIRPSuggestionInterface[] {
-        let noteSuggestion: LIRPSuggestionInterface[] = [];
+    getNoteSuggestion(withHidden: boolean = false): LIRPSuggestionList {
+        let noteSuggestion = new LIRPSuggestionList;
         this.multiNote.map((element) => {
-            if (element.getListSuggestion().length > 0) {
+            if (element.getListSuggestion(withHidden).length > 0) {
                 noteSuggestion.push({
                     noteName: element.noteName,
                     title: element.noteName,
@@ -483,14 +462,6 @@ class LIRPMultiNote implements LIRPNoteInterface {
         });
         return noteSuggestion;
     };
-    
-    // pickRandomItemFromList(listTitle: string, workOnReference: boolean = true): string {
-    //     if (this.noteSelected !== undefined) {
-    //         return this.noteSelected.pickRandomItemFromList(listTitle);
-    //     } else {
-    //         return "";
-    //     }
-    // }; 
 
     pickRandomItemFromList(listTitle: string, workOnReference: boolean = true): string {
         let superNote = new LIRPNote(this.nullValue, this.escapeString, this.referenceMaxDepth);
@@ -536,11 +507,53 @@ interface LIRPSuggestionInterface {
     description: string;
 }
 
+class LIRPSuggestionList {
+    list: LIRPSuggestionInterface[];
+
+    constructor() {
+        this.list = [];
+    };
+
+    push (element: LIRPSuggestionInterface): void {
+        this.list.push(element);
+    };
+
+    filterByNoteName(noteName: string): LIRPSuggestionList {
+        const filterList = new LIRPSuggestionList();
+        this.list.map((element) => {
+            if (element.noteName === noteName) {
+                filterList.push(element);
+            }
+        });
+        return filterList;
+    };
+
+    filter(callback: (element: LIRPSuggestionInterface, index?: number, array?: LIRPSuggestionInterface[]) => boolean): LIRPSuggestionList {
+        const filteredList = new LIRPSuggestionList();
+        for (let i = 0; i < this.list.length; i++) {
+            if (callback(this.list[i], i, this.list)) {
+                filteredList.push(this.list[i]);
+            }
+        }
+        return filteredList;
+    };
+
+    concat(otherList: LIRPSuggestionList): LIRPSuggestionList {
+        const newList = new LIRPSuggestionList();
+        newList.list = this.list.concat(otherList.list);
+        return newList;
+    };
+
+    get length (): number {
+        return this.list.length;
+    }
+}
+
 export class LIRPSuggestModal extends SuggestModal<LIRPSuggestionInterface> {
-    items: LIRPSuggestionInterface[];
+    items: LIRPSuggestionList;
     callback: (value: LIRPSuggestionInterface) => void;
   
-    constructor(app: App, items: LIRPSuggestionInterface[], callback: (value: LIRPSuggestionInterface) => void) {
+    constructor(app: App, items: LIRPSuggestionList, callback: (value: LIRPSuggestionInterface) => void) {
       super(app);
       this.items = items;
       this.callback = callback;
@@ -549,9 +562,9 @@ export class LIRPSuggestModal extends SuggestModal<LIRPSuggestionInterface> {
     getSuggestions(query: string): LIRPSuggestionInterface[] {
         return this.items.filter((item) =>
             item.title.toLowerCase().includes(query.toLowerCase())
-        );
-      }
-    
+        ).list; // Retourne le tableau `list` de LIRPSuggestionList
+    }
+
     renderSuggestion(item: LIRPSuggestionInterface, el: HTMLElement) {
         el.createEl('div', { text: item.title });
         el.createEl('small', {text: item.description});
@@ -624,7 +637,7 @@ export default class ListItemRandomPicker extends Plugin {
             if (this.settings.showNoteSelector) {
                 new LIRPSuggestModal(this.app, currentLIRP.getNoteSuggestion(), (item) => {
                     // currentLIRP.selectNote(item.title);
-                    new LIRPSuggestModal(this.app, currentLIRP.getListSuggestion(false, item.noteName), (item) => {
+                    new LIRPSuggestModal(this.app, currentLIRP.getListSuggestion().filterByNoteName(item.noteName), (item) => {
                         this.workWithTitle(currentLIRP, item.title);
                     }).open();
                 }).open();
