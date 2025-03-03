@@ -695,7 +695,7 @@ export default class ListItemRandomPicker extends Plugin {
             id: 'insert-setting-item',
             name: 'Insert list settings values',
             callback: () => {
-                this.insertListSetting(LIRPList.getSettingString());
+                this.insertString(LIRPList.getSettingString());
             }
         });
 
@@ -746,14 +746,22 @@ export default class ListItemRandomPicker extends Plugin {
         } else if (currentLIRP.length === 1) {
             // currentLIRP.selectNote('');
             new LIRPSuggestModal(this.app, currentLIRP.getListSuggestion(), (item) => {
-                this.workWithTitle(currentLIRP, item.title);
+                if (action === 'note') {
+                    this.workWithTitle(currentLIRP, item.title);
+                } else {
+                    this.insertString(`{${item.title}}`);
+                };
             }).open();
         } else {
             if (this.settings.showNoteSelector) {
                 new LIRPSuggestModal(this.app, currentLIRP.getNoteSuggestion(), (item) => {
                     // currentLIRP.selectNote(item.title);
                     new LIRPSuggestModal(this.app, currentLIRP.getListSuggestion().filterByNoteName(item.noteName), (item) => {
-                        this.workWithTitle(currentLIRP, item.title);
+                        if (action === 'note') {
+                            this.workWithTitle(currentLIRP, item.title);
+                        } else {
+                            this.insertString(`{${item.title}}`);
+                        };
                     }).open();
                 }).open();
             } else {
@@ -815,7 +823,7 @@ export default class ListItemRandomPicker extends Plugin {
         };
     };
 
-    insertListSetting(stringToInsert: string) {
+    insertString(stringToInsert: string) {
         const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
         if (activeView) {
             activeView.editor.replaceSelection(stringToInsert);
