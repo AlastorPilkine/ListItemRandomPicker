@@ -138,11 +138,11 @@ class LIRPLogElement {
     getType(): LIRPLogType {
         const errors: string[] = ['dupInNote', 'dupInFolder'];
         return 'warning';
-        if (errors.contains(this.status)) {
-            return 'error'
-        } else {
-            return 'warning'
-        }
+        // if (errors.contains(this.status)) {
+        //     return 'error'
+        // } else {
+        //     return 'warning'
+        // }
     };
 
     constructor (noteName: string, listTitle: string, status: LIRPLogStatus, complement: string = '') {
@@ -201,6 +201,19 @@ class LIRPList implements LIRPListInterface {
     nullValue: string;
     escapeString: string;
 
+    static getSettingString(value: '' | 'hide' | 'hide_ticked' = ''): string {
+        if (value === '') {
+            return '- [ ] Hide this list\n'
+        } else {
+            switch (value) {
+                case 'hide':
+                    return '^\- \\[[x ]\\] Hide this list$';
+                case 'hide_ticked':
+                    return '^\- \\[x\\] Hide this list$';
+            };
+        };
+    };
+
     constructor(noteName: string, lines: string[], nullValue: string, escapeString: string) {
         this.title = "";
         this.description = "";
@@ -212,14 +225,8 @@ class LIRPList implements LIRPListInterface {
 
         const headingRegEx = /^# +(.+)$/;
         this.title = lines[0].replace(headingRegEx, "$1");
-        const italicHeadingRegex = /^(_|\*)\S/;
-        if (italicHeadingRegex.test(this.title)) {
-            this.hidden = true;
-        } else {
-            this.hidden = false;
-        }
         lines.shift();
-        const listBeginItemRegex = /^(-|\d+\.) +(.+)$/;
+        const listBeginItemRegex = /^(-|\d+\.) (?!\[) *(.+)$/;
         const listBeginIndexes = findIndexes(lines, (element) => listBeginItemRegex.test(element));
         if (listBeginIndexes.length === 0) {
             this.logs.push(noteName, this.title, 'emptyList');
@@ -243,6 +250,16 @@ class LIRPList implements LIRPListInterface {
             // if (mdDescription.at(-1) === "") {
             //     mdDescription.pop();
             // }
+            let isHidden: boolean = false;
+            const hideRegexTicked = new RegExp (LIRPList.getSettingString('hide_ticked'));
+            const hideRegex = new RegExp (LIRPList.getSettingString('hide'));
+            mdDescription.map((element) => {
+                if (hideRegexTicked.test(element)) {
+                    isHidden = true;
+                    this.hidden = isHidden;
+                };
+            });
+            mdDescription = mdDescription.filter((element) => !(hideRegex.test(element)));
             this.description = mdDescription.join('\n');
         } else {
             this.description = "";
@@ -663,14 +680,30 @@ export default class ListItemRandomPicker extends Plugin {
         await this.loadSettings();
 
         this.addRibbonIcon('list-tree', 'Pick random list item', (evt: MouseEvent) => {
-            this.doTheJob();
+            this.doTheJob('note');
         });
 
         this.addCommand({
             id: 'insert-random-item',
             name: 'Insert random item from list',
             callback: () => {
-                this.doTheJob();
+                this.doTheJob('note');
+            }
+        });
+
+        this.addCommand({
+            id: 'insert-setting-item',
+            name: 'Insert list settings values',
+            callback: () => {
+                this.insertListSetting(LIRPList.getSettingString());
+            }
+        });
+
+        this.addCommand({
+            id: 'insert-reference-item',
+            name: 'Insert list reference',
+            callback: () => {
+                this.doTheJob('reference');
             }
         });
 
@@ -681,7 +714,7 @@ export default class ListItemRandomPicker extends Plugin {
 
     }
 
-    async doTheJob(): Promise<void> {
+    async doTheJob(action: string): Promise<void> {
         const allLIRPFiles = this.getLIRPFiles(this.settings.notePath);
         let currentLIRP = new LIRPMultiNote(this.settings.nullValue, this.settings.escapeValue, this.settings.maxMacroDepth);
         let loadWithoutError:boolean = true;
@@ -777,6 +810,15 @@ export default class ListItemRandomPicker extends Plugin {
                 }
                 editor.replaceSelection(stringToInsert);
             };
+        } else {
+            new Notice("No active Markdown editor found.");
+        };
+    };
+
+    insertListSetting(stringToInsert: string) {
+        const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
+        if (activeView) {
+            activeView.editor.replaceSelection(stringToInsert);
         } else {
             new Notice("No active Markdown editor found.");
         };
