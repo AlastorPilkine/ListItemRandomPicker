@@ -1,4 +1,3 @@
-import { exec } from 'child_process';
 import { App, SuggestModal, Notice, Plugin, PluginSettingTab, Setting, TFile, TFolder, MarkdownView} from 'obsidian';
 
 function findIndexes<T>(anArray: T[], predicate: (element: T, index: number) => boolean): number[] {
@@ -41,7 +40,7 @@ class DiceRoller {
     checkDice(diceString: string): boolean {
       const diceRegex = /^(\d+)?d(\d+)([\+\-]\d+)?(e)?(k\d+)?(kl\d+)?$/i;
       return diceRegex.test(diceString);
-    }
+    };
   
     rollDice(diceString: string): number {
       if (!this.checkDice(diceString)) {
@@ -83,7 +82,7 @@ class DiceRoller {
   
       const sum = results.reduce((acc, val) => acc + val, 0);
       return sum + modifier;
-    }
+    };
   
     /**
      * Remplace les lancers de dés encadrés par des délimiteurs dans une chaîne multi-lignes.
@@ -113,7 +112,7 @@ class DiceRoller {
           return match; // Si la syntaxe est invalide, on garde le texte d'origine
         }
       });
-    }
+    };
   
     /**
      * Échappe les caractères spéciaux pour une utilisation dans une expression régulière.
@@ -123,10 +122,66 @@ class DiceRoller {
      */
     private escapeRegExp(string: string): string {
       return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    }
-  }
+    };
+  };
 //-----------------------------------------------------------------
 
+type LIRPLogStatus = 'dupInNote' | 'dupInFolder' | 'emptyList' | 'emptyNote';
+type LIRPLogType = 'error' | 'warning';
+
+class LIRPLogElement {
+    noteName: string;
+    listTitle: string;
+    status: LIRPLogStatus;
+    complement: string;
+
+    getType(): LIRPLogType {
+        const errors: string[] = ['dupInNote', 'dupInFolder'];
+        return 'warning';
+        if (errors.contains(this.status)) {
+            return 'error'
+        } else {
+            return 'warning'
+        }
+    };
+
+    constructor (noteName: string, listTitle: string, status: LIRPLogStatus, complement: string = '') {
+        this.noteName = noteName;
+        this.listTitle = listTitle;
+        this.status = status;
+        this.complement = complement;
+    };
+
+    toString(): string {
+        return `${this.getType()} / ${this.noteName} / ${this.listTitle} / ${this.status} / ${this.complement}`;
+    };
+};
+class LIRPLog {
+    logs: LIRPLogElement[];
+
+    constructor() {
+        this.logs = [];
+    };
+    
+    push(noteName: string, listTitle: string, status: LIRPLogStatus, complement: string = ''): void {
+        this.logs.push(new LIRPLogElement(noteName, listTitle, status, complement));
+    };
+
+    add(logs: LIRPLog):void{
+        this.logs = this.logs.concat(logs.logs);
+    };
+
+    get(type: LIRPLogType): string[]{
+        const logsForType = this.logs.filter((element) => 
+            element.getType() === type
+        );
+        let getArray: string[] = [];
+        logsForType.map((element) => {
+            getArray.push(element.toString());
+        });
+        return getArray;
+    }
+};
 interface LIRPListInterface {
     title: string;
     description: string;
@@ -142,16 +197,16 @@ class LIRPList implements LIRPListInterface {
     description: string;
     hidden: boolean;
     items: string[];
-    warning: string[];
+    logs: LIRPLog;
     nullValue: string;
     escapeString: string;
 
-    constructor(lines: string[], nullValue: string, escapeString: string) {
+    constructor(noteName: string, lines: string[], nullValue: string, escapeString: string) {
         this.title = "";
         this.description = "";
         this.hidden = false;
         this.items = [];
-        this.warning = [];
+        this.logs = new LIRPLog();
         this.nullValue = nullValue;
         this.escapeString = escapeString;
 
@@ -167,7 +222,7 @@ class LIRPList implements LIRPListInterface {
         const listBeginItemRegex = /^(-|\d+\.) +(.+)$/;
         const listBeginIndexes = findIndexes(lines, (element) => listBeginItemRegex.test(element));
         if (listBeginIndexes.length === 0) {
-            this.warning.push(`No items in list ${this.title}`);
+            this.logs.push(noteName, this.title, 'emptyList');
             this.hidden = true;
             return;
         }
@@ -258,7 +313,7 @@ class LIRPList implements LIRPListInterface {
     }
 
     getWarning(): string[] {
-        return this.warning;
+        return this.logs.get('warning');
     }
 
 }
@@ -280,8 +335,7 @@ class LIRPNote implements LIRPNoteInterface {
     noteName: string;
     description: string;
     list: LIRPList[];
-    error: string[];
-    warning: string[];
+    logs: LIRPLog;
     nullValue: string;
     escapeString: string;
     rollDice: boolean;
@@ -291,8 +345,7 @@ class LIRPNote implements LIRPNoteInterface {
         this.noteName = "";
         this.description = "";
         this.list = [];
-        this.error = [];
-        this.warning = [];
+        this.logs = new LIRPLog();
         this.nullValue = nullValue;
         this.escapeString = escapeString;
         this.rollDice = true;
@@ -313,7 +366,7 @@ class LIRPNote implements LIRPNoteInterface {
         const headingRegex = /^# .+$/;
         let headingIndexes = findIndexes(lines, (element) => headingRegex.test(element));
         if (headingIndexes.length === 0) {
-            this.error.push(`No list defined in note "${noteName}"`);
+            this.logs.push(noteName, '', 'emptyNote');
             return false;
         }
         if (headingIndexes[0] !== 0) {
@@ -324,15 +377,15 @@ class LIRPNote implements LIRPNoteInterface {
         }
         const headingCount = headingIndexes.length
         for (let currentIndex = 0; currentIndex < (headingCount - 1); currentIndex++) {
-                this.pushListIfNotExists(new LIRPList(lines.slice(headingIndexes[currentIndex], headingIndexes[currentIndex + 1]), this.nullValue, this.escapeString));
+                this.pushListIfNotExists(new LIRPList(this.noteName, lines.slice(headingIndexes[currentIndex], headingIndexes[currentIndex + 1]), this.nullValue, this.escapeString));
         };
-        this.pushListIfNotExists(new LIRPList(lines.slice(headingIndexes[headingCount - 1]), this.nullValue, this.escapeString));
+        this.pushListIfNotExists(new LIRPList(this.noteName, lines.slice(headingIndexes[headingCount - 1]), this.nullValue, this.escapeString));
         return true
     };
 
     pushListIfNotExists(listToPush: LIRPList): boolean {
         if (this.getListTitles().contains(listToPush.title)) {
-            this.warning.push(`A list named "${listToPush.title}" already exists in notes "${this.noteName}, ignoring"`);
+            this.logs.push(this.noteName, listToPush.title, 'dupInNote');
             return false;
         } else {
             this.list.push(listToPush);
@@ -396,22 +449,15 @@ class LIRPNote implements LIRPNoteInterface {
     } 
 
     getError(): string[] {
-        return this.error;
+        return this.logs.get('error');
     };
 
     getWarning(): string[] {
-        let allWarning: string[];
-        allWarning = [];
-        allWarning = allWarning.concat(this.warning);
+        let allWarning: string[] = this.logs.get('warning');
         this.list.forEach((element) => {
             allWarning = allWarning.concat(element.getWarning());
         });
-        let NoteWarning: string[];
-        NoteWarning = [];
-        allWarning.forEach((element) => 
-            NoteWarning.push(`Warning in note "${this.noteName}" : ${element}`)
-        );
-        return NoteWarning;
+        return allWarning
     };
 
     get length(): number {
@@ -423,17 +469,15 @@ class LIRPMultiNote implements LIRPNoteInterface {
     multiNote: LIRPNote[];
     nullValue: string;
     escapeString: string;
-    noteSelected: LIRPNote|undefined;
     referenceMaxDepth: number;
-    warning: string[];
-
+    logs: LIRPLog;
 
     constructor (nullValue: string, escapeString: string, referenceMaxDepth: number) {
         this.multiNote = [];
         this.nullValue = nullValue;
         this.escapeString = escapeString;
         this.referenceMaxDepth = referenceMaxDepth;
-        this.warning = [];
+        this.logs = new LIRPLog();
     };
 
     loadFromNote(noteName: string, noteContent: string): boolean {
@@ -448,14 +492,27 @@ class LIRPMultiNote implements LIRPNoteInterface {
         let unic:boolean = true;
         noteToPush.getListTitles().map((element) => {
             if (allListTitle.contains(element)) {
-                this.warning.push(`Warning, duplicate List "${element}" found in note "${noteToPush.noteName}"`);
+                this.logs.push(noteToPush.noteName, element, 'dupInFolder', this.getNoteNameFromListTitle(element));
                 unic = false;
             }
         });
         if (unic) {
             this.multiNote.push(noteToPush);
+        } else {
+            this.logs.add(noteToPush.logs);
         };
         return unic;
+    };
+
+    getNoteNameFromListTitle(listTitle: string): string {
+        let note = this.multiNote.find((element) =>
+            element.getListTitles().contains(listTitle)
+        );
+        if (note !== undefined) {
+            return note.noteName;
+        } else {
+            return '';
+        };
     };
     
     getListTitles() : string[] {
@@ -505,7 +562,7 @@ class LIRPMultiNote implements LIRPNoteInterface {
     };
 
     getWarning(): string[] {
-        let allWarning:string[] = this.warning;
+        let allWarning:string[] = this.logs.get('warning');
         this.multiNote.map((element) => {
             allWarning = allWarning.concat(element.getWarning());
         });
@@ -584,7 +641,15 @@ export class LIRPSuggestModal extends SuggestModal<LIRPSuggestionInterface> {
 
     renderSuggestion(item: LIRPSuggestionInterface, el: HTMLElement) {
         el.createEl('div', { text: item.title });
-        el.createEl('small', {text: item.description});
+        let message:string = item.description
+        // if (item.noteName !== item.title) {
+        //     if (item.description !== '') {
+        //         message = `${item.description}\n(from : ${item.noteName})`;
+        //     } else {
+        //         message = `(from : ${item.noteName})`;
+        //     }
+        // };
+        el.createEl('small', {text: message});
       }
   
       onChooseSuggestion(item: LIRPSuggestionInterface, evt: MouseEvent | KeyboardEvent) {
