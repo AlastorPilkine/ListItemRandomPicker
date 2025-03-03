@@ -1,7 +1,7 @@
 {
 	"id": "list-item-random-picker",
 	"name": "List Item Random Picker",
-	"version": "1.0.6",
+	"version": "1.0.7",
 	"minAppVersion": "0.15.0",
 	"description": "Create your own random tables, and pick random item from them to insert into your notes. Useful for RPGs, but not only !",
 	"author": "Alastor Pilkine",
