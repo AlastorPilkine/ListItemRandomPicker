@@ -764,8 +764,12 @@ export default class ListItemRandomPicker extends Plugin {
                 }).open();
             } else {
                 new LIRPSuggestModal(this.app, currentLIRP.getListSuggestion(), (item) => {
-                    this.workWithTitle(currentLIRP, item.title);
-                }).open();
+                    if (action === 'note') {
+                        this.workWithTitle(currentLIRP, item.title);
+                    } else {
+                        this.insertString(`{${item.title}}`);
+                    };
+            }).open();
             };
         };
     }
