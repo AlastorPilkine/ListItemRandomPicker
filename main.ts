@@ -744,7 +744,6 @@ export default class ListItemRandomPicker extends Plugin {
             new Notice('Error : check settings "Path " in plugin List Item Random Picker !');
             return;
         } else if (currentLIRP.length === 1) {
-            // currentLIRP.selectNote('');
             new LIRPSuggestModal(this.app, currentLIRP.getListSuggestion(), (item) => {
                 if (action === 'note') {
                     this.workWithTitle(currentLIRP, item.title);
@@ -755,7 +754,6 @@ export default class ListItemRandomPicker extends Plugin {
         } else {
             if (this.settings.showNoteSelector) {
                 new LIRPSuggestModal(this.app, currentLIRP.getNoteSuggestion(), (item) => {
-                    // currentLIRP.selectNote(item.title);
                     new LIRPSuggestModal(this.app, currentLIRP.getListSuggestion().filterByNoteName(item.noteName), (item) => {
                         if (action === 'note') {
                             this.workWithTitle(currentLIRP, item.title);
@@ -766,7 +764,6 @@ export default class ListItemRandomPicker extends Plugin {
                 }).open();
             } else {
                 new LIRPSuggestModal(this.app, currentLIRP.getListSuggestion(), (item) => {
-                    // currentLIRP.selectNote(item.noteName);
                     this.workWithTitle(currentLIRP, item.title);
                 }).open();
             };
