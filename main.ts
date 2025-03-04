@@ -126,7 +126,7 @@ class DiceRoller {
   };
 //-----------------------------------------------------------------
 
-type LIRPLogStatus = 'dupInNote' | 'dupInFolder' | 'emptyList' | 'emptyNote';
+type LIRPLogStatus = 'dupInNote' | 'dupInFolder' | 'emptyList' | 'emptyNote' | 'refLimit';
 type LIRPLogType = 'error' | 'warning';
 
 class LIRPLogElement {
@@ -335,9 +335,9 @@ class LIRPList implements LIRPListInterface {
 
 }
 
-interface LIRPExecRefSubInterface {
+interface LIRPDoRefSubInterface {
     lastListTitle: string;
-    modifiedItem: string;
+    modifiedText: string;
 }
 
 interface LIRPNoteInterface {
@@ -420,50 +420,61 @@ class LIRPNote implements LIRPNoteInterface {
         return noteSuggestion;
     }
 
-    execReferenceSubstitution(item: string): LIRPExecRefSubInterface {
-        const stringMacroRefRegex: string = `\{(${this.list.map((element) => escapeRegex(element.title)).join('|')})\}`;
-        const macroRefRegex = new RegExp (stringMacroRefRegex,'mg');
+    doReferenceSubstitution(text: string): LIRPDoRefSubInterface {
         let match;
-        let modifiedItem:string = item;
+        let modifiedText:string = text;
         let listTitle:string = "";
-        while ((match = macroRefRegex.exec(modifiedItem)) !== null) {
-            let newValue: string = this.pickRandomItemFromList(match[1], false); 
-            listTitle = match[0];
-            modifiedItem = modifiedItem.replace(listTitle, newValue);
-            macroRefRegex.lastIndex = match.index + newValue.length;
+        const stringRefRegex: string = `\{(${this.list.map((element) => escapeRegex(element.title)).join('|')})\}`;
+        for (let repeat = 0; repeat < this.referenceMaxDepth; repeat++) {
+            // returnOfDoExecSub = this.doReferenceSubstitution(randomItem);
+            // randomItem = returnOfDoExecSub.modifiedText;
+            const refRegex = new RegExp (stringRefRegex,'mg');
+            while ((match = refRegex.exec(modifiedText)) !== null) {
+                let newValue: string = this.pickRandomItemFromList(match[1], false); 
+                listTitle = match[0];
+                modifiedText = modifiedText.replace(listTitle, newValue);
+                refRegex.lastIndex = match.index + newValue.length;
+            }
+        }
+        if (this.rollDice) {
+            const diceRoller = new DiceRoller();
+            modifiedText = diceRoller.replaceDiceRolls(modifiedText,'{','}');
         }
         return {
             lastListTitle: listTitle,
-            modifiedItem: modifiedItem,
+            modifiedText: modifiedText,
         };
     }
 
     pickRandomItemFromList(listTitle: string, workOnReference: boolean = true): string {
         let randomItem: string = "";
-        let returnOfExecMacro: LIRPExecRefSubInterface = {
+        let returnOfDoExecSub: LIRPDoRefSubInterface = {
             lastListTitle: listTitle,
-            modifiedItem: "",
+            modifiedText: "",
         };
         const currentList = this.list.find((element) => element.title === listTitle);
         if (currentList !== undefined) {
             randomItem = currentList.pickRandomItem();
-            for (let repeat = 0; repeat < this.referenceMaxDepth; repeat++) {
-                returnOfExecMacro = this.execReferenceSubstitution(randomItem);
-                randomItem = returnOfExecMacro.modifiedItem;
-            }
-        }
-        const stringMacroRefRegex: string = `\{(${this.list.map((element) => escapeRegex(element.title)).join('|')})\}`;
-        const macroRefRegex = new RegExp (stringMacroRefRegex);
-        if (macroRefRegex.test(randomItem) && workOnReference) {
-            new Notice(`Macro depth limit reached in note "${this.noteName}" after calling "${returnOfExecMacro.lastListTitle}"`);
-        };
-        if (workOnReference && this.rollDice) {
-            const diceRoller = new DiceRoller();
-            return diceRoller.replaceDiceRolls(randomItem,'{','}');
-        } else {
+            // for (let repeat = 0; repeat < this.referenceMaxDepth; repeat++) {
+            if (workOnReference) {
+                returnOfDoExecSub = this.doReferenceSubstitution(randomItem);
+                randomItem = returnOfDoExecSub.modifiedText;
+                // }
+                const stringMacroRefRegex: string = `\{(${this.list.map((element) => escapeRegex(element.title)).join('|')})\}`;
+                const macroRefRegex = new RegExp (stringMacroRefRegex);
+                if (macroRefRegex.test(randomItem) && workOnReference) {
+                    if (returnOfDoExecSub.lastListTitle === '') {
+                        returnOfDoExecSub.lastListTitle = listTitle;
+                    }
+                    this.logs.push(this.noteName, returnOfDoExecSub.lastListTitle, 'refLimit');
+                    new Notice(`Macro depth limit reached in note "${this.noteName}" after calling "${returnOfDoExecSub.lastListTitle}"`);
+                };
+            };
             return randomItem;
-        }
-    } 
+        } else {
+            return "";
+        };
+    };
 
     getError(): string[] {
         return this.logs.get('error');
@@ -564,6 +575,7 @@ class LIRPMultiNote implements LIRPNoteInterface {
 
     pickRandomItemFromList(listTitle: string, workOnReference: boolean = true): string {
         let superNote = new LIRPNote(this.nullValue, this.escapeString, this.referenceMaxDepth);
+        superNote.noteName = this.getNoteNameFromListTitle(listTitle);
         this.multiNote.map((element) => {
             superNote.list = superNote.list.concat(element.list);
         });
