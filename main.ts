@@ -543,7 +543,7 @@ class LIRPMultiNote implements LIRPNoteInterface {
     getListSuggestion(withHidden: boolean = false): LIRPSuggestionList {
         let allListSuggestion = new LIRPSuggestionList();
         this.multiNote.map((element) => {
-            allListSuggestion = allListSuggestion.concat(element.getListSuggestion())
+            allListSuggestion = allListSuggestion.concat(element.getListSuggestion(withHidden));
         });
         return allListSuggestion;
     };
@@ -744,7 +744,7 @@ export default class ListItemRandomPicker extends Plugin {
             new Notice('Error : check settings "Path " in plugin List Item Random Picker !');
             return;
         } else if (currentLIRP.length === 1) {
-            new LIRPSuggestModal(this.app, currentLIRP.getListSuggestion(), (item) => {
+            new LIRPSuggestModal(this.app, currentLIRP.getListSuggestion(action === 'reference'), (item) => {
                 if (action === 'note') {
                     this.workWithTitle(currentLIRP, item.title);
                 } else {
@@ -753,8 +753,8 @@ export default class ListItemRandomPicker extends Plugin {
             }).open();
         } else {
             if (this.settings.showNoteSelector) {
-                new LIRPSuggestModal(this.app, currentLIRP.getNoteSuggestion(), (item) => {
-                    new LIRPSuggestModal(this.app, currentLIRP.getListSuggestion().filterByNoteName(item.noteName), (item) => {
+                new LIRPSuggestModal(this.app, currentLIRP.getNoteSuggestion(action === 'reference'), (item) => {
+                    new LIRPSuggestModal(this.app, currentLIRP.getListSuggestion(action === 'reference').filterByNoteName(item.noteName), (item) => {
                         if (action === 'note') {
                             this.workWithTitle(currentLIRP, item.title);
                         } else {
@@ -763,7 +763,7 @@ export default class ListItemRandomPicker extends Plugin {
                     }).open();
                 }).open();
             } else {
-                new LIRPSuggestModal(this.app, currentLIRP.getListSuggestion(), (item) => {
+                new LIRPSuggestModal(this.app, currentLIRP.getListSuggestion(action === 'reference'), (item) => {
                     if (action === 'note') {
                         this.workWithTitle(currentLIRP, item.title);
                     } else {
