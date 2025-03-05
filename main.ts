@@ -127,7 +127,7 @@ class DiceRoller {
 //-----------------------------------------------------------------
 
 type LIRPLogStatus = 'dupInNote' | 'dupInFolder' | 'emptyList' | 'emptyNote' | 'refLimit';
-type LIRPLogType = 'error' | 'warning';
+type LIRPLogType = 'error' | 'warning' | 'info';
 
 class LIRPLogElement {
     noteName: string;
@@ -180,7 +180,12 @@ class LIRPLog {
             getArray.push(element.toString());
         });
         return getArray;
-    }
+    };
+
+    flush(): void {
+        this.logs = [];
+    };
+
 };
 interface LIRPListInterface {
     title: string;
@@ -467,7 +472,6 @@ class LIRPNote implements LIRPNoteInterface {
                         returnOfDoExecSub.lastListTitle = listTitle;
                     }
                     this.logs.push(this.noteName, returnOfDoExecSub.lastListTitle, 'refLimit');
-                    new Notice(`Macro depth limit reached in note "${this.noteName}" after calling "${returnOfDoExecSub.lastListTitle}"`);
                 };
             };
             return randomItem;
@@ -726,7 +730,7 @@ export default class ListItemRandomPicker extends Plugin {
 
     }
 
-    async doTheJob(action: string): Promise<void> {
+    async loadLIRPFiles(): Promise<LIRPMultiNote | undefined> {
         const allLIRPFiles = this.getLIRPFiles(this.settings.notePath);
         let currentLIRP = new LIRPMultiNote(this.settings.nullValue, this.settings.escapeValue, this.settings.maxMacroDepth);
         let loadWithoutError:boolean = true;
@@ -739,23 +743,30 @@ export default class ListItemRandomPicker extends Plugin {
                 loadWithoutError =  currentLIRP.loadFromNote(currentFSObject.path.slice(0, -3), content) && loadWithoutError;
             };                    
         };
+        if (currentLIRP.length === 0) {
+            new Notice('Error : check settings "Path " in plugin List Item Random Picker !');
+            return undefined;
+        };
         if (!loadWithoutError) {
             currentLIRP.getError().map((element) => {
                 new Notice(element);
             });
-            if (currentLIRP.length === 0) {
-                return;
-            }
-        }
+            return undefined
+        };
         if (this.settings.showWarning) {
             currentLIRP.getWarning().forEach(element => {
                 new Notice(element);
             });
         };
-        if (currentLIRP.length === 0) {
-            new Notice('Error : check settings "Path " in plugin List Item Random Picker !');
+        return currentLIRP;
+    };
+
+    async doTheJob(action: string): Promise<void> {
+        const currentLIRP = await this.loadLIRPFiles();
+        if (currentLIRP === undefined) {
             return;
-        } else if (currentLIRP.length === 1) {
+        }
+        if (currentLIRP.length === 1) {
             new LIRPSuggestModal(this.app, currentLIRP.getListSuggestion(action === 'reference'), (item) => {
                 if (action === 'note') {
                     this.workWithTitle(currentLIRP, item.title);
@@ -805,13 +816,12 @@ export default class ListItemRandomPicker extends Plugin {
             const selectionForNotificationRegex:string = `^${this.settings.selectionForNotification}$`;
             const noticeRegex = new RegExp(selectionForNotificationRegex);
     
-            const editor = activeView.editor;
-            const selection = editor.getSelection();
+            const selection = activeView.editor.getSelection();
 
             if (noticeRegex.test(selection)) {
                 new Notice(Note.pickRandomItemFromList(listTitle));
                 if (this.settings.deleteSelectionForNotification) {
-                    editor.replaceSelection('');
+                    activeView.editor.replaceSelection('');
                 }
             } else {
                 let stringToInsert: string = '';
@@ -829,14 +839,14 @@ export default class ListItemRandomPicker extends Plugin {
                 } else {
                     stringToInsert = Note.pickRandomItemFromList(listTitle);
                 }
-                editor.replaceSelection(stringToInsert);
+                activeView.editor.replaceSelection(stringToInsert);
             };
         } else {
             new Notice("No active Markdown editor found.");
         };
     };
 
-    insertString(stringToInsert: string) {
+    insertString(stringToInsert: string): void {
         const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
         if (activeView) {
             activeView.editor.replaceSelection(stringToInsert);
