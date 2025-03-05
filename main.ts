@@ -136,12 +136,11 @@ class LIRPLogElement {
     complement: string;
 
     getType(): LIRPLogType {
-        const errors: string[] = ['dupInNote', 'dupInFolder'];
-        return 'warning';
+        const errors: string[] = ['pathSetting'];
         // if (errors.contains(this.status)) {
         //     return 'error'
         // } else {
-        //     return 'warning'
+            return 'warning'
         // }
     };
 
@@ -179,7 +178,6 @@ class LIRPLog {
         logsForType.map((element) => {
             getArray.push(element.toString());
         });
-        console.log(getArray);
         return getArray;
     };
 
@@ -285,6 +283,10 @@ class LIRPList implements LIRPListInterface {
         }
         this.pushItemBasedOnWeight(item);
     }
+
+    flushLogs(): void {
+        this.logs.flush()
+    };
 
     pushItemBasedOnWeight(item: string[]) : void {
         const ItemWithWeightRegEx = /^\((\d+)\)\s+(.+)$/;
@@ -457,6 +459,13 @@ class LIRPNote implements LIRPNoteInterface {
         };
     }
 
+    flushLogs(): void {
+        this.logs.flush();
+        this.list.map((element) => {
+            element.flushLogs();
+        });
+    };
+
     pickRandomItemFromList(listTitle: string, workOnReference: boolean = true): string {
         let randomItem: string = "";
         let returnOfDoExecSub: LIRPDoRefSubInterface = {
@@ -612,6 +621,13 @@ class LIRPMultiNote implements LIRPNoteInterface {
             superNote.list = superNote.list.concat(element.list);
         });
         return superNote.pickRandomItemFromList(listTitle);
+    };
+
+    flushLogs(): void {
+        this.logs.flush();
+        this.multiNote.map((element) => {
+            element.flushLogs()
+        });
     };
 
     getError(): string[] {
@@ -775,71 +791,10 @@ export default class ListItemRandomPicker extends Plugin {
         });
 
         this.addSettingTab(new LIRPSettingTab(this.app, this));
-    }
-
-    onunload() {
-
-    }
-
-    async loadLIRPFiles(): Promise<LIRPMultiNote | undefined> {
-        const allLIRPFiles = this.getLIRPFiles(this.settings.notePath);
-        let currentLIRP = new LIRPMultiNote(this.settings.nullValue, this.settings.escapeValue, this.settings.maxMacroDepth);
-
-        for (const currentFile of allLIRPFiles) {
-            const currentFSObject = this.app.vault.getAbstractFileByPath(currentFile);
-            let content:string = '';
-            if (currentFSObject instanceof TFile) {
-                content = await this.app.vault.cachedRead(currentFSObject);
-                currentLIRP.loadFromNote(currentFSObject.path.slice(0, -3), content);
-            };                    
-        };
-        if (currentLIRP.length === 0) {
-            this.logs.push('ListItemRandomPicker','loadLIRPFiles','pathSetting');
-            return undefined;
-        };
-        if (currentLIRP.hasErrors()) {
-            currentLIRP.getError().map((element) => {
-                new Notice(element);
-            });
-            return undefined;
-        };
-        if (this.settings.showWarning) {
-            currentLIRP.getWarning().forEach(element => {
-                new Notice(element);
-            });
-        };
-        return currentLIRP;
     };
 
-    async prepareAction(action: string): Promise<void> {
-        const currentLIRP = await this.loadLIRPFiles();
-        if (currentLIRP === undefined) {
-            return;
-        };
-        if (action === 'doRefSubstitution') {
-            this.doReferenceSubstitution(currentLIRP);
-        } else {
-            if (currentLIRP.length === 1 || !this.settings.showNoteSelector) {
-                new LIRPSuggestModal(this.app, currentLIRP.getListSuggestion(action === 'reference'), (item) => {
-                    if (action === 'note') {
-                        this.workWithTitle(currentLIRP, item.title);
-                    } else {
-                        this.insertString(`{${item.title}}`);
-                    };
-                }).open();
-            } else {
-                new LIRPSuggestModal(this.app, currentLIRP.getNoteSuggestion(action === 'reference'), (item) => {
-                    new LIRPSuggestModal(this.app, currentLIRP.getListSuggestion(action === 'reference').filterByNoteName(item.noteName), (item) => {
-                        if (action === 'note') {
-                            this.workWithTitle(currentLIRP, item.title);
-                        } else {
-                            this.insertString(`{${item.title}}`);
-                        };
-                    }).open();
-                }).open();
-            };
-        };
-    }
+    onunload() {
+    };
 
     getLIRPFiles (notePath: string): string[] {
         let allVaultFiles = this.app.vault.getMarkdownFiles();
@@ -860,6 +815,64 @@ export default class ListItemRandomPicker extends Plugin {
             this.logs.push('ListItemRandmPicker','getLIRPFiles','folderAndFile')
         }
         return filesInNotePath;
+    };
+
+    async loadLIRPFiles(): Promise<LIRPMultiNote> {
+        const allLIRPFiles = this.getLIRPFiles(this.settings.notePath);
+        let currentLIRP = new LIRPMultiNote(this.settings.nullValue, this.settings.escapeValue, this.settings.maxMacroDepth);
+
+        for (const currentFile of allLIRPFiles) {
+            const currentFSObject = this.app.vault.getAbstractFileByPath(currentFile);
+            let content:string = '';
+            if (currentFSObject instanceof TFile) {
+                content = await this.app.vault.cachedRead(currentFSObject);
+                currentLIRP.loadFromNote(currentFSObject.path.slice(0, -3), content);
+            };                    
+        };
+        return currentLIRP;
+    };
+
+    async prepareAction(action: string): Promise<void> {
+        const currentLIRP = await this.loadLIRPFiles();
+        if (currentLIRP.length === 0) {
+            this.logs.push('ListItemRandomPicker','loadLIRPFiles','pathSetting');
+        };
+        if (!currentLIRP.hasErrors() && currentLIRP.length !== 0) {
+            if (action === 'doRefSubstitution') {
+                this.doReferenceSubstitution(currentLIRP);
+            } else {
+                if (currentLIRP.length === 1 || !this.settings.showNoteSelector) {
+                    new LIRPSuggestModal(this.app, currentLIRP.getListSuggestion(action === 'reference'), (item) => {
+                        if (action === 'note') {
+                            this.workWithTitle(currentLIRP, item.title);
+                        } else {
+                            this.insertString(`{${item.title}}`);
+                        };
+                    }).open();
+                } else {
+                    new LIRPSuggestModal(this.app, currentLIRP.getNoteSuggestion(action === 'reference'), (item) => {
+                        new LIRPSuggestModal(this.app, currentLIRP.getListSuggestion(action === 'reference').filterByNoteName(item.noteName), (item) => {
+                            if (action === 'note') {
+                                this.workWithTitle(currentLIRP, item.title);
+                            } else {
+                                this.insertString(`{${item.title}}`);
+                            };
+                        }).open();
+                    }).open();
+                };
+            };
+        };
+        this.doLogManagement(currentLIRP.getLogs());
+    };
+
+    doLogManagement(multiNoteLogs: LIRPLog): void {
+        new Notice('Logs Management')
+        const allLogs = this.logs;
+        allLogs.add(multiNoteLogs);
+        allLogs.logs.map((element) => {
+            new Notice(element.toString());
+        });
+        this.logs.flush();
     };
 
     workWithTitle(Note: LIRPMultiNote, listTitle: string): void {
@@ -943,10 +956,8 @@ class LIRPSettingTab extends PluginSettingTab {
         const { containerEl } = this;
         containerEl.empty();
 
-        containerEl.createEl('h2', { text: 'Note setting' });
-
         new Setting(containerEl)
-            .setName('Note Path')
+            .setName('Path')
             .setDesc('The path and filename of the note that contains the lists to be used. Exemple : "Folder/Note".')
             .addText(text => text
                 .setPlaceholder('Enter the path to your note')
@@ -957,7 +968,7 @@ class LIRPSettingTab extends PluginSettingTab {
                 })
             );
 
-        containerEl.createEl('h2', { text: 'Interface settings' });
+        containerEl.createEl('h2', { text: 'Behavior' });
 
         new Setting(containerEl)
             .setName('Show note selector')
@@ -981,7 +992,32 @@ class LIRPSettingTab extends PluginSettingTab {
                 })
             });
 
-        containerEl.createEl('h2', { text: 'List settings' });
+        new Setting(containerEl)
+            .setName('Delete selection value for notification')
+            .setDesc('If set, the selected value for notification is deleted.')
+            .addToggle((toggle) => {
+                toggle.setValue(this.plugin.settings.deleteSelectionForNotification);
+                toggle.onChange(async (value) => {
+                    this.plugin.settings.deleteSelectionForNotification = value;
+                    await this.plugin.saveSettings();
+                })
+            });
+
+        new Setting(containerEl)
+            .setName('Macro depth limit')
+            .setDesc('Macro recursion limit: how many nested macro calls are allowed. Zero prevents nested macros from being resolved.')
+            .addSlider((slider) =>
+                slider
+                    .setValue(this.plugin.settings.maxMacroDepth)
+                    .setLimits(0, 10, 1)
+                    .setDynamicTooltip()
+                    .onChange(async (value) => {
+                    this.plugin.settings.maxMacroDepth = value;
+                    await this.plugin.saveSettings();
+                    })
+            );
+
+        containerEl.createEl('h2', { text: 'Specific values' });
 
         new Setting(containerEl)
             .setName('Null value')
@@ -1007,8 +1043,6 @@ class LIRPSettingTab extends PluginSettingTab {
                 })
             );
 
-        containerEl.createEl('h2', { text: 'Selection settings' });
-
         new Setting(containerEl)
             .setName('Selection value for notification')
             .setDesc('If the text selected has this value, the item is not inserted, but notified !')
@@ -1020,32 +1054,5 @@ class LIRPSettingTab extends PluginSettingTab {
                     await this.plugin.saveSettings();
                 })
             );
-
-        new Setting(containerEl)
-            .setName('Delete selection value for notification')
-            .setDesc('If set, the selected value for notification is deleted.')
-            .addToggle((toggle) => {
-                toggle.setValue(this.plugin.settings.deleteSelectionForNotification);
-                toggle.onChange(async (value) => {
-                    this.plugin.settings.deleteSelectionForNotification = value;
-                    await this.plugin.saveSettings();
-                })
-            });
-
-            containerEl.createEl('h2', { text: 'Technical settings' });
-
-            new Setting(containerEl)
-                .setName('Macro depth limit')
-                .setDesc('Macro recursion limit: how many nested macro calls are allowed. Zero prevents nested macros from being resolved.')
-                .addSlider((slider) =>
-                    slider
-                        .setValue(this.plugin.settings.maxMacroDepth)
-                        .setLimits(0, 10, 1)
-                        .setDynamicTooltip()
-                        .onChange(async (value) => {
-                        this.plugin.settings.maxMacroDepth = value;
-                        await this.plugin.saveSettings();
-                        })
-                );
         }
 }
