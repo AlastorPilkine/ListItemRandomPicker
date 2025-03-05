@@ -958,7 +958,7 @@ class LIRPSettingTab extends PluginSettingTab {
 
         new Setting(containerEl)
             .setName('Path')
-            .setDesc('The path and filename of the note that contains the lists to be used. Exemple : "Folder/Note".')
+            .setDesc('The path of a note or a folder. Exemple : "Folder/Note" or "Folder".')
             .addText(text => text
                 .setPlaceholder('Enter the path to your note')
                 .setValue(this.plugin.settings.notePath)
@@ -972,7 +972,7 @@ class LIRPSettingTab extends PluginSettingTab {
 
         new Setting(containerEl)
             .setName('Show note selector')
-            .setDesc('If path is a folder')
+            .setDesc('If path is a folder containing at least two notes, a selector will allow you to choose the note; otherwise, all lists will be offered to you.')
             .addToggle((toggle) => {
                 toggle.setValue(this.plugin.settings.showNoteSelector);
                 toggle.onChange(async (value) => {
@@ -983,7 +983,7 @@ class LIRPSettingTab extends PluginSettingTab {
 
         new Setting(containerEl)
             .setName('Show warning')
-            .setDesc('Display the warnings of notes and lists, if any. Warnings for macro depth limit reached are always displayed.')
+            .setDesc('Are warnings displayed as notifications ? Note that warnings related to the reference limit are always displayed.')
             .addToggle((toggle) => {
                 toggle.setValue(this.plugin.settings.showWarning);
                 toggle.onChange(async (value) => {
@@ -1016,43 +1016,5 @@ class LIRPSettingTab extends PluginSettingTab {
                     await this.plugin.saveSettings();
                     })
             );
-
-        containerEl.createEl('h2', { text: 'Specific values' });
-
-        new Setting(containerEl)
-            .setName('Null value')
-            .setDesc('If the first line of an item has this value, the line is flush.')
-            .addText(text => text
-                .setPlaceholder('Enter value')
-                .setValue(this.plugin.settings.nullValue)
-                .onChange(async (value) => {
-                    this.plugin.settings.nullValue = value;
-                    await this.plugin.saveSettings();
-                })
-            );
-
-        new Setting(containerEl)
-            .setName('Escape value')
-            .setDesc('If you want some headin one or first level list item in your item, you could escape them with these value')
-            .addText(text => text
-                .setPlaceholder('Enter value')
-                .setValue(this.plugin.settings.escapeValue)
-                .onChange(async (value) => {
-                    this.plugin.settings.escapeValue = value;
-                    await this.plugin.saveSettings();
-                })
-            );
-
-        new Setting(containerEl)
-            .setName('Selection value for notification')
-            .setDesc('If the text selected has this value, the item is not inserted, but notified !')
-            .addText(text => text
-                .setPlaceholder('Enter value')
-                .setValue(this.plugin.settings.selectionForNotification)
-                .onChange(async (value) => {
-                    this.plugin.settings.selectionForNotification = value;
-                    await this.plugin.saveSettings();
-                })
-            );
-        }
+    }
 }
