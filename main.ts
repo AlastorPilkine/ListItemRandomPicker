@@ -126,12 +126,12 @@ class DiceRoller {
   };
 //-----------------------------------------------------------------
 
-type LIRPLogStatus = 'dupInNote' | 'dupInFolder' | 'emptyList' | 'emptyNote' | 'refLimit';
+type LIRPLogStatus = 'dupInNote' | 'dupInFolder' | 'emptyList' | 'emptyNote' | 'refLimit' | 'pathSetting' | 'folderAndFile' | 'showItem' | 'noActiveView';
 type LIRPLogType = 'error' | 'warning' | 'info';
 
 class LIRPLogElement {
-    noteName: string;
-    listTitle: string;
+    father: string;
+    child: string;
     status: LIRPLogStatus;
     complement: string;
 
@@ -145,15 +145,15 @@ class LIRPLogElement {
         // }
     };
 
-    constructor (noteName: string, listTitle: string, status: LIRPLogStatus, complement: string = '') {
-        this.noteName = noteName;
-        this.listTitle = listTitle;
+    constructor (father: string, child: string, status: LIRPLogStatus, complement: string = '') {
+        this.father = father;
+        this.child = child;
         this.status = status;
         this.complement = complement;
     };
 
     toString(): string {
-        return `${this.getType()} / ${this.noteName} / ${this.listTitle} / ${this.status} / ${this.complement}`;
+        return `${this.getType()} / ${this.father} / ${this.child} / ${this.status} / ${this.complement}`;
     };
 };
 class LIRPLog {
@@ -163,8 +163,8 @@ class LIRPLog {
         this.logs = [];
     };
     
-    push(noteName: string, listTitle: string, status: LIRPLogStatus, complement: string = ''): void {
-        this.logs.push(new LIRPLogElement(noteName, listTitle, status, complement));
+    push(father: string, child: string, status: LIRPLogStatus, complement: string = ''): void {
+        this.logs.push(new LIRPLogElement(father, child, status, complement));
     };
 
     add(logs: LIRPLog):void{
@@ -179,6 +179,7 @@ class LIRPLog {
         logsForType.map((element) => {
             getArray.push(element.toString());
         });
+        console.log(getArray);
         return getArray;
     };
 
@@ -334,6 +335,10 @@ class LIRPList implements LIRPListInterface {
         return randomItem;
     }
 
+    getLogs(): LIRPLog {
+        return this.logs;
+    };
+
     getWarning(): string[] {
         return this.logs.get('warning');
     }
@@ -397,12 +402,13 @@ class LIRPNote implements LIRPNoteInterface {
             // Due to split on '\n', the slice, and at least a join on '\n' the last '\n' is always lost !
             this.description = lines.slice(0, headingIndexes[0]).join('\n');
         }
-        const headingCount = headingIndexes.length
+        const headingCount = headingIndexes.length;
+        let pushSuccess:boolean = true;
         for (let currentIndex = 0; currentIndex < (headingCount - 1); currentIndex++) {
-                this.pushListIfNotExists(new LIRPList(this.noteName, lines.slice(headingIndexes[currentIndex], headingIndexes[currentIndex + 1]), this.nullValue, this.escapeString));
+                pushSuccess = this.pushListIfNotExists(new LIRPList(this.noteName, lines.slice(headingIndexes[currentIndex], headingIndexes[currentIndex + 1]), this.nullValue, this.escapeString)) && pushSuccess;
         };
-        this.pushListIfNotExists(new LIRPList(this.noteName, lines.slice(headingIndexes[headingCount - 1]), this.nullValue, this.escapeString));
-        return true
+         pushSuccess = this.pushListIfNotExists(new LIRPList(this.noteName, lines.slice(headingIndexes[headingCount - 1]), this.nullValue, this.escapeString)) && pushSuccess;
+         return pushSuccess;
     };
 
     pushListIfNotExists(listToPush: LIRPList): boolean {
@@ -484,6 +490,15 @@ class LIRPNote implements LIRPNoteInterface {
         return this.logs.get('error');
     };
 
+    getLogs(): LIRPLog {
+        let allLogs = new LIRPLog;
+        allLogs.add(this.logs);
+        this.list.map((element) => {
+            allLogs.add(element.getLogs());
+        });
+        return allLogs;
+    };
+
     getWarning(): string[] {
         let allWarning: string[] = this.logs.get('warning');
         this.list.forEach((element) => {
@@ -514,8 +529,8 @@ class LIRPMultiNote implements LIRPNoteInterface {
 
     loadFromNote(noteName: string, noteContent: string): boolean {
         const currentNote = new LIRPNote(this.nullValue, this.escapeString, this.referenceMaxDepth);
-        const status = currentNote.loadFromNote(noteName, noteContent);
-        this.pushNoteIfListNotExists(currentNote);
+        let status = currentNote.loadFromNote(noteName, noteContent);
+        status = this.pushNoteIfListNotExists(currentNote) && status;
         return status;
     };
 
@@ -577,6 +592,19 @@ class LIRPMultiNote implements LIRPNoteInterface {
         return noteSuggestion;
     };
 
+    doReferenceSubstitution(text: string):string {
+        let superNote = new LIRPNote(this.nullValue, this.escapeString, this.referenceMaxDepth);
+        this.multiNote.map((element) => {
+            superNote.list = superNote.list.concat(element.list);
+        });
+        let returnOfDoExecSub: LIRPDoRefSubInterface = {
+            lastListTitle: 'Reference substitution in selection',
+            modifiedText: "",
+        };
+        returnOfDoExecSub = superNote.doReferenceSubstitution(text);
+        return returnOfDoExecSub.modifiedText
+    }
+
     pickRandomItemFromList(listTitle: string, workOnReference: boolean = true): string {
         let superNote = new LIRPNote(this.nullValue, this.escapeString, this.referenceMaxDepth);
         superNote.noteName = this.getNoteNameFromListTitle(listTitle);
@@ -592,6 +620,20 @@ class LIRPMultiNote implements LIRPNoteInterface {
             allError = allError.concat(element.getError());
         });
         return allError;
+    };
+
+    getLogs(): LIRPLog {
+        let allLogs = new LIRPLog;
+        allLogs.add(this.logs);
+        this.multiNote.map((element) => {
+            allLogs.add(element.getLogs());
+        });
+        return allLogs;
+    };
+
+    hasErrors(): boolean {
+        const allLogs = this.getLogs();
+        return (allLogs.get('error').length !== 0) ;
     };
 
     getWarning(): string[] {
@@ -691,19 +733,20 @@ export class LIRPSuggestModal extends SuggestModal<LIRPSuggestionInterface> {
 
 export default class ListItemRandomPicker extends Plugin {
     settings: LIRPPluginSettings;
+    logs: LIRPLog;
 
     async onload() {
         await this.loadSettings();
-
+        this.logs = new LIRPLog();
         this.addRibbonIcon('list-tree', 'Pick random list item', (evt: MouseEvent) => {
-            this.doTheJob('note');
+            this.prepareAction('note');
         });
 
         this.addCommand({
             id: 'insert-random-item',
             name: 'Insert random item from list',
             callback: () => {
-                this.doTheJob('note');
+                this.prepareAction('note');
             }
         });
 
@@ -719,7 +762,15 @@ export default class ListItemRandomPicker extends Plugin {
             id: 'insert-reference-item',
             name: 'Insert list reference',
             callback: () => {
-                this.doTheJob('reference');
+                this.prepareAction('reference');
+            }
+        });
+
+        this.addCommand({
+            id: 'replace-reference-item',
+            name: 'Replace reference in selection',
+            callback: () => {
+                this.prepareAction('doRefSubstitution');
             }
         });
 
@@ -733,25 +784,24 @@ export default class ListItemRandomPicker extends Plugin {
     async loadLIRPFiles(): Promise<LIRPMultiNote | undefined> {
         const allLIRPFiles = this.getLIRPFiles(this.settings.notePath);
         let currentLIRP = new LIRPMultiNote(this.settings.nullValue, this.settings.escapeValue, this.settings.maxMacroDepth);
-        let loadWithoutError:boolean = true;
 
         for (const currentFile of allLIRPFiles) {
             const currentFSObject = this.app.vault.getAbstractFileByPath(currentFile);
             let content:string = '';
             if (currentFSObject instanceof TFile) {
                 content = await this.app.vault.cachedRead(currentFSObject);
-                loadWithoutError =  currentLIRP.loadFromNote(currentFSObject.path.slice(0, -3), content) && loadWithoutError;
+                currentLIRP.loadFromNote(currentFSObject.path.slice(0, -3), content);
             };                    
         };
         if (currentLIRP.length === 0) {
-            new Notice('Error : check settings "Path " in plugin List Item Random Picker !');
+            this.logs.push('ListItemRandomPicker','loadLIRPFiles','pathSetting');
             return undefined;
         };
-        if (!loadWithoutError) {
+        if (currentLIRP.hasErrors()) {
             currentLIRP.getError().map((element) => {
                 new Notice(element);
             });
-            return undefined
+            return undefined;
         };
         if (this.settings.showWarning) {
             currentLIRP.getWarning().forEach(element => {
@@ -761,21 +811,23 @@ export default class ListItemRandomPicker extends Plugin {
         return currentLIRP;
     };
 
-    async doTheJob(action: string): Promise<void> {
+    async prepareAction(action: string): Promise<void> {
         const currentLIRP = await this.loadLIRPFiles();
         if (currentLIRP === undefined) {
             return;
-        }
-        if (currentLIRP.length === 1) {
-            new LIRPSuggestModal(this.app, currentLIRP.getListSuggestion(action === 'reference'), (item) => {
-                if (action === 'note') {
-                    this.workWithTitle(currentLIRP, item.title);
-                } else {
-                    this.insertString(`{${item.title}}`);
-                };
-            }).open();
+        };
+        if (action === 'doRefSubstitution') {
+            this.doReferenceSubstitution(currentLIRP);
         } else {
-            if (this.settings.showNoteSelector) {
+            if (currentLIRP.length === 1 || !this.settings.showNoteSelector) {
+                new LIRPSuggestModal(this.app, currentLIRP.getListSuggestion(action === 'reference'), (item) => {
+                    if (action === 'note') {
+                        this.workWithTitle(currentLIRP, item.title);
+                    } else {
+                        this.insertString(`{${item.title}}`);
+                    };
+                }).open();
+            } else {
                 new LIRPSuggestModal(this.app, currentLIRP.getNoteSuggestion(action === 'reference'), (item) => {
                     new LIRPSuggestModal(this.app, currentLIRP.getListSuggestion(action === 'reference').filterByNoteName(item.noteName), (item) => {
                         if (action === 'note') {
@@ -785,27 +837,28 @@ export default class ListItemRandomPicker extends Plugin {
                         };
                     }).open();
                 }).open();
-            } else {
-                new LIRPSuggestModal(this.app, currentLIRP.getListSuggestion(action === 'reference'), (item) => {
-                    if (action === 'note') {
-                        this.workWithTitle(currentLIRP, item.title);
-                    } else {
-                        this.insertString(`{${item.title}}`);
-                    };
-            }).open();
             };
         };
     }
 
     getLIRPFiles (notePath: string): string[] {
-        let allVaultFiles = this.app.vault.getFiles();
+        let allVaultFiles = this.app.vault.getMarkdownFiles();
         let filesInNotePath:string[] = [];
-        const notePathRegex = new RegExp(`^${notePath}(/.+)?\.md$`);
+        let foundAFile: boolean = false;
+        const noteFileName: string = `${notePath}.md`
+        const notePathRegex = new RegExp(`^${notePath}/.+\.md$`);
         allVaultFiles.map((element) => {
             if (notePathRegex.test(element.path)) {
                 filesInNotePath.push(element.path);
+            } else if (element.path === noteFileName) {
+                foundAFile = true;
             };
         });
+        if (filesInNotePath.length === 0 && foundAFile) {
+            filesInNotePath.push(noteFileName);
+        } else if (foundAFile && filesInNotePath.length !== 0) {
+            this.logs.push('ListItemRandmPicker','getLIRPFiles','folderAndFile')
+        }
         return filesInNotePath;
     };
 
@@ -819,6 +872,7 @@ export default class ListItemRandomPicker extends Plugin {
             const selection = activeView.editor.getSelection();
 
             if (noticeRegex.test(selection)) {
+                this.logs.push('',listTitle,'showItem');
                 new Notice(Note.pickRandomItemFromList(listTitle));
                 if (this.settings.deleteSelectionForNotification) {
                     activeView.editor.replaceSelection('');
@@ -842,6 +896,18 @@ export default class ListItemRandomPicker extends Plugin {
                 activeView.editor.replaceSelection(stringToInsert);
             };
         } else {
+            this.logs.push('ListItemRandomPicker','workWithTitle','noActiveView')
+            new Notice("No active Markdown editor found.");
+        };
+    };
+
+    doReferenceSubstitution(multiNote: LIRPMultiNote): void {
+        const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
+        if (activeView) {
+            const selection = activeView.editor.getSelection();
+            activeView.editor.replaceSelection(multiNote.doReferenceSubstitution(selection));
+        } else {
+            this.logs.push('ListItemRandomPicker','workWithTitle','noActiveView')
             new Notice("No active Markdown editor found.");
         };
     };
@@ -851,6 +917,7 @@ export default class ListItemRandomPicker extends Plugin {
         if (activeView) {
             activeView.editor.replaceSelection(stringToInsert);
         } else {
+            this.logs.push('ListItemRandomPicker','workWithTitle','noActiveView')
             new Notice("No active Markdown editor found.");
         };
     };
