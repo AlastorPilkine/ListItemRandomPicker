@@ -1016,5 +1016,43 @@ class LIRPSettingTab extends PluginSettingTab {
                     await this.plugin.saveSettings();
                     })
             );
+
+            containerEl.createEl("h2", { text: "Specific values" });
+    
+            new Setting(containerEl)
+                .setName("Null value")
+                .setDesc("If the first line of an item has this value, the line is flush.")
+                .addText((text) => text
+                    .setPlaceholder("Enter value")
+                    .setValue(this.plugin.settings.nullValue)
+                    .onChange(async (value) => {
+                    this.plugin.settings.nullValue = value;
+                    await this.plugin.saveSettings();
+                    })
+            );
+
+            new Setting(containerEl)
+                .setName("Escape value")
+                .setDesc("If you want some headin one or first level list item in your item, you could escape them with these value")
+                .addText((text) => text
+                    .setPlaceholder("Enter value")
+                    .setValue(this.plugin.settings.escapeValue)
+                    .onChange(async (value) => {
+                        this.plugin.settings.escapeValue = value;
+                        await this.plugin.saveSettings();
+                })
+            );
+
+            new Setting(containerEl)
+                .setName("Selection value for notification")
+                .setDesc("If the text selected has this value, the item is not inserted, but notified !")
+                .addText((text) => text
+                    .setPlaceholder("Enter value")
+                    .setValue(this.plugin.settings.selectionForNotification)
+                    .onChange(async (value) => {
+                    this.plugin.settings.selectionForNotification = value;
+                    await this.plugin.saveSettings();
+                })
+            );
     }
 }
