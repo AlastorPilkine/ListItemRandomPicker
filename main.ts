@@ -1,3 +1,4 @@
+import { Console } from 'console';
 import { App, SuggestModal, Notice, Plugin, PluginSettingTab, Setting, TFile, TFolder, MarkdownView} from 'obsidian';
 
 function findIndexes<T>(anArray: T[], predicate: (element: T, index: number) => boolean): number[] {
@@ -8,26 +9,26 @@ function findIndexes<T>(anArray: T[], predicate: (element: T, index: number) => 
       }
     });
     return indexes;
-}
+};
 
 function escapeRegex(stringToEscape: string): string {
     return stringToEscape.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
+};
 interface LIRPPluginSettings {
     notePath: string;
     showWarning: boolean;
-    maxMacroDepth: number;
+    maxReferenceDepth: number;
     selectionForNotification: string;
     deleteSelectionForNotification: boolean;
     nullValue: string;
     escapeValue: string;
     showNoteSelector: boolean;
-}
+};
 
 const DEFAULT_SETTINGS: LIRPPluginSettings = {
-    notePath: 'Path of a note or a folder',
+    notePath: 'Note or folder path',
     showWarning: true,
-    maxMacroDepth: 1,
+    maxReferenceDepth: 1,
     selectionForNotification: '!',
     deleteSelectionForNotification: false,
     nullValue: 'null',
@@ -126,8 +127,21 @@ class DiceRoller {
   };
 //-----------------------------------------------------------------
 
-type LIRPLogStatus = 'dupInNote' | 'dupInFolder' | 'emptyList' | 'emptyNote' | 'refLimit' | 'pathSetting' | 'folderAndFile' | 'showItem' | 'noActiveView';
+type LIRPLogStatus = 'dupInNote' | 'dupInFolder' | 'emptyList' | 'emptyNote' | 'refLimit' | 'subRefLimit' | 'pathSetting' | 'folderAndFile' | 'showItem' | 'noActiveView';
 type LIRPLogType = 'error' | 'warning' | 'info';
+
+const LIRPLogStatusValues: LIRPLogStatus[] = [
+    'dupInNote',
+    'dupInFolder',
+    'emptyList',
+    'emptyNote',
+    'refLimit',
+    'subRefLimit',
+    'pathSetting',
+    'folderAndFile',
+    'showItem',
+    'noActiveView',
+];
 
 class LIRPLogElement {
     father: string;
@@ -135,13 +149,31 @@ class LIRPLogElement {
     status: LIRPLogStatus;
     complement: string;
 
+    static getErrorStatus(): string[] {
+        return ['dupInFolder','pathSetting'];
+    };
+
+    static getWarningStatus(): string[] {
+        let warningStatus:string[] = [];
+        LIRPLogStatusValues.map((element) => {
+            if (!LIRPLogElement.getErrorStatus().contains(element) && !LIRPLogElement.getWarningStatus().contains(element)) {
+                warningStatus.push(element);
+            };
+        });
+        return warningStatus;
+    };
+
+    static getInfoStatus(): string[] {
+        return ['showItem','refLimit','subRefLimit'];
+    };
+
     getType(): LIRPLogType {
-        const errors: string[] = ['pathSetting'];
-        // if (errors.contains(this.status)) {
-        //     return 'error'
-        // } else {
+        const errors: string[] = ['pathSetting', 'dupInFolder'];
+        if (errors.contains(this.status)) {
+            return 'error'
+        } else {
             return 'warning'
-        // }
+        };
     };
 
     constructor (father: string, child: string, status: LIRPLogStatus, complement: string = '') {
@@ -186,13 +218,18 @@ class LIRPLog {
     };
 
 };
+
+//-----------------------------------------------------------------
+
 interface LIRPListInterface {
     title: string;
     description: string;
     items: string[];
     getSuggestion(noteName: string): LIRPSuggestionInterface;
+    flushLogs(): void;
     notHidden(): boolean;
     pickRandomItem(): string;
+    getLogs(): LIRPLog;
     getWarning(): string[];
 }
 
@@ -282,7 +319,7 @@ class LIRPList implements LIRPListInterface {
             item.pop();
         }
         this.pushItemBasedOnWeight(item);
-    }
+    };
 
     flushLogs(): void {
         this.logs.flush()
@@ -327,7 +364,7 @@ class LIRPList implements LIRPListInterface {
 
     notHidden(): boolean {
         return !this.hidden;
-    }
+    };
 
     pickRandomItem(): string {
         let randomItem: string = "";
@@ -335,7 +372,7 @@ class LIRPList implements LIRPListInterface {
             randomItem = this.items[Math.floor(Math.random() * this.items.length)];
         }
         return randomItem;
-    }
+    };
 
     getLogs(): LIRPLog {
         return this.logs;
@@ -343,14 +380,22 @@ class LIRPList implements LIRPListInterface {
 
     getWarning(): string[] {
         return this.logs.get('warning');
-    }
+    };
+
+    get length(): number {
+        return this.items.length;
+    };
 
 }
+
+//-----------------------------------------------------------------
 
 interface LIRPDoRefSubInterface {
     lastListTitle: string;
     modifiedText: string;
 }
+
+//-----------------------------------------------------------------
 
 interface LIRPNoteInterface {
     loadFromNote(noteName: string, noteContent: string): boolean;
@@ -358,6 +403,9 @@ interface LIRPNoteInterface {
     pickRandomItemFromList(listTitle: string, workOnReference: boolean): string; 
     getError(): string[];
     getWarning(): string[];
+    getLogs(): LIRPLog;
+    getListTitles() : string[];
+    flushLogs(): void;
 }
 
 class LIRPNote implements LIRPNoteInterface {
@@ -379,7 +427,7 @@ class LIRPNote implements LIRPNoteInterface {
         this.escapeString = escapeString;
         this.rollDice = true;
         this.referenceMaxDepth = referenceMaxDepth;
-    }
+    };
 
     getListTitles() : string[] {
         let listTitles:string[] = [];
@@ -431,7 +479,7 @@ class LIRPNote implements LIRPNoteInterface {
             }
         });
         return noteSuggestion;
-    }
+    };
 
     doReferenceSubstitution(text: string): LIRPDoRefSubInterface {
         let match;
@@ -453,11 +501,12 @@ class LIRPNote implements LIRPNoteInterface {
             const diceRoller = new DiceRoller();
             modifiedText = diceRoller.replaceDiceRolls(modifiedText,'{','}');
         }
+
         return {
             lastListTitle: listTitle,
             modifiedText: modifiedText,
         };
-    }
+    };
 
     flushLogs(): void {
         this.logs.flush();
@@ -480,9 +529,9 @@ class LIRPNote implements LIRPNoteInterface {
                 returnOfDoExecSub = this.doReferenceSubstitution(randomItem);
                 randomItem = returnOfDoExecSub.modifiedText;
                 // }
-                const stringMacroRefRegex: string = `\{(${this.list.map((element) => escapeRegex(element.title)).join('|')})\}`;
-                const macroRefRegex = new RegExp (stringMacroRefRegex);
-                if (macroRefRegex.test(randomItem) && workOnReference) {
+                const stringRefRegex: string = `\{(${this.list.map((element) => escapeRegex(element.title)).join('|')})\}`;
+                const RefRegex = new RegExp (stringRefRegex);
+                if (RefRegex.test(randomItem) && workOnReference) {
                     if (returnOfDoExecSub.lastListTitle === '') {
                         returnOfDoExecSub.lastListTitle = listTitle;
                     }
@@ -611,8 +660,14 @@ class LIRPMultiNote implements LIRPNoteInterface {
             modifiedText: "",
         };
         returnOfDoExecSub = superNote.doReferenceSubstitution(text);
+        let listTitle:string = "";
+        const stringRefRegex: string = `\{(${superNote.list.map((element) => escapeRegex(element.title)).join('|')})\}`;
+        const refRegex = new RegExp(stringRefRegex);
+        if (refRegex.test(returnOfDoExecSub.modifiedText)) {
+            this.logs.push('', '', 'subRefLimit');
+        };
         return returnOfDoExecSub.modifiedText
-    }
+    };
 
     pickRandomItemFromList(listTitle: string, workOnReference: boolean = true): string {
         let superNote = new LIRPNote(this.nullValue, this.escapeString, this.referenceMaxDepth);
@@ -620,7 +675,9 @@ class LIRPMultiNote implements LIRPNoteInterface {
         this.multiNote.map((element) => {
             superNote.list = superNote.list.concat(element.list);
         });
-        return superNote.pickRandomItemFromList(listTitle);
+        const randomItem: string = superNote.pickRandomItemFromList(listTitle);
+        this.logs.add(superNote.getLogs());
+        return randomItem;
     };
 
     flushLogs(): void {
@@ -711,7 +768,7 @@ class LIRPSuggestionList {
 
     get length (): number {
         return this.list.length;
-    }
+    };
 }
 
 export class LIRPSuggestModal extends SuggestModal<LIRPSuggestionInterface> {
@@ -722,13 +779,13 @@ export class LIRPSuggestModal extends SuggestModal<LIRPSuggestionInterface> {
       super(app);
       this.items = items;
       this.callback = callback;
-    }
+    };
 
     getSuggestions(query: string): LIRPSuggestionInterface[] {
         return this.items.filter((item) =>
             item.title.toLowerCase().includes(query.toLowerCase())
-        ).list; // Retourne le tableau `list` de LIRPSuggestionList
-    }
+        ).list;
+    };
 
     renderSuggestion(item: LIRPSuggestionInterface, el: HTMLElement) {
         el.createEl('div', { text: item.title });
@@ -741,11 +798,12 @@ export class LIRPSuggestModal extends SuggestModal<LIRPSuggestionInterface> {
         //     }
         // };
         el.createEl('small', {text: message});
-      }
+      };
   
       onChooseSuggestion(item: LIRPSuggestionInterface, evt: MouseEvent | KeyboardEvent) {
         this.callback(item);
-      }}
+      };
+};
 
 export default class ListItemRandomPicker extends Plugin {
     settings: LIRPPluginSettings;
@@ -784,7 +842,7 @@ export default class ListItemRandomPicker extends Plugin {
 
         this.addCommand({
             id: 'replace-reference-item',
-            name: 'Replace reference in selection',
+            name: 'Replace references in selection',
             callback: () => {
                 this.prepareAction('doRefSubstitution');
             }
@@ -819,7 +877,7 @@ export default class ListItemRandomPicker extends Plugin {
 
     async loadLIRPFiles(): Promise<LIRPMultiNote> {
         const allLIRPFiles = this.getLIRPFiles(this.settings.notePath);
-        let currentLIRP = new LIRPMultiNote(this.settings.nullValue, this.settings.escapeValue, this.settings.maxMacroDepth);
+        let currentLIRP = new LIRPMultiNote(this.settings.nullValue, this.settings.escapeValue, this.settings.maxReferenceDepth);
 
         for (const currentFile of allLIRPFiles) {
             const currentFSObject = this.app.vault.getAbstractFileByPath(currentFile);
@@ -861,32 +919,71 @@ export default class ListItemRandomPicker extends Plugin {
                     }).open();
                 };
             };
-        };
+        }
         this.doLogManagement(currentLIRP.getLogs());
+        this.logs.flush();
+        currentLIRP.flushLogs();
     };
 
-    doLogManagement(multiNoteLogs: LIRPLog): void {
-        new Notice('Logs Management')
+    doLogManagement(multiNoteLogs?: LIRPLog): void {
         const allLogs = this.logs;
-        allLogs.add(multiNoteLogs);
+        if (multiNoteLogs !== undefined) {
+            allLogs.add(multiNoteLogs);
+            multiNoteLogs.flush();
+        };
+        const errorMsg: string[] = [];
+        const warningMsg: string[] = [];
+        const infoMsg: string[] = [];
         allLogs.logs.map((element) => {
-            new Notice(element.toString());
+            switch (element.status) {
+                case 'dupInNote':
+                    warningMsg.push(`List "${element.child}" is duplicate in note "${element.father}". List is ignored`);
+                    break;
+                case 'dupInFolder':
+                    errorMsg.push(`ERROR : List "${element.child}" exists in two notes, "${element.father}" and "${element.complement}", make correction !`);
+                    break;
+                case 'emptyList':
+                    warningMsg.push(`List "${element.child}" is empty in "${element.father}"`);
+                    break;
+                case 'emptyNote':
+                    warningMsg.push(`"${element.child}" is empty`);
+                    break;
+                case 'refLimit':
+                    warningMsg.push(`Reference depth limit reach with list "${element.child}" in note "${element.father}"`);
+                    break;
+                // case 'subRefLimit':
+                //     warningMsg.push(`Reference depth limit reach`);
+                //     break;
+                case 'pathSetting':
+                    errorMsg.push(`ERROR : verify path in plugin settings`);
+                    break;
+                case 'folderAndFile':
+                    warningMsg.push(`A note with the same name as the folder in settings gets ignored.`);
+                    break;
+                case 'showItem':
+                    infoMsg.push(`${element.complement}`);
+                    break;
+                case 'noActiveView':
+                    warningMsg.push(`No note in edition mode to do this action`);
+                    break;
+            };
+            errorMsg.map((element) => new Notice(element));
+            if (this.settings.showWarning) {
+                warningMsg.map((element) => new Notice(element));
+            };
+            infoMsg.map((element) => new Notice(element));
         });
         this.logs.flush();
     };
 
-    workWithTitle(Note: LIRPMultiNote, listTitle: string): void {
+    workWithTitle(note: LIRPMultiNote, listTitle: string): void {
         const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
-
         if (activeView) {
             const selectionForNotificationRegex:string = `^${this.settings.selectionForNotification}$`;
             const noticeRegex = new RegExp(selectionForNotificationRegex);
-    
             const selection = activeView.editor.getSelection();
-
             if (noticeRegex.test(selection)) {
                 this.logs.push('',listTitle,'showItem');
-                new Notice(Note.pickRandomItemFromList(listTitle));
                 if (this.settings.deleteSelectionForNotification) {
                     activeView.editor.replaceSelection('');
                 }
@@ -900,18 +997,18 @@ export default class ListItemRandomPicker extends Plugin {
                     const delimiter = selection.replace(/^\d+/, '');
                     const arrayStringToinsert: string[] = [];
                     for (let i = 0; i < repeat; i++) {
-                        arrayStringToinsert.push(Note.pickRandomItemFromList(listTitle));
+                        arrayStringToinsert.push(note.pickRandomItemFromList(listTitle));
                     }
                     stringToInsert = arrayStringToinsert.join(delimiter);
                 } else {
-                    stringToInsert = Note.pickRandomItemFromList(listTitle);
+                    stringToInsert = note.pickRandomItemFromList(listTitle);
                 }
                 activeView.editor.replaceSelection(stringToInsert);
             };
         } else {
             this.logs.push('ListItemRandomPicker','workWithTitle','noActiveView')
-            new Notice("No active Markdown editor found.");
         };
+        this.doLogManagement(note.getLogs());
     };
 
     doReferenceSubstitution(multiNote: LIRPMultiNote): void {
@@ -921,7 +1018,6 @@ export default class ListItemRandomPicker extends Plugin {
             activeView.editor.replaceSelection(multiNote.doReferenceSubstitution(selection));
         } else {
             this.logs.push('ListItemRandomPicker','workWithTitle','noActiveView')
-            new Notice("No active Markdown editor found.");
         };
     };
 
@@ -931,8 +1027,8 @@ export default class ListItemRandomPicker extends Plugin {
             activeView.editor.replaceSelection(stringToInsert);
         } else {
             this.logs.push('ListItemRandomPicker','workWithTitle','noActiveView')
-            new Notice("No active Markdown editor found.");
         };
+        this.doLogManagement();
     };
 
     async loadSettings() {
@@ -966,55 +1062,6 @@ class LIRPSettingTab extends PluginSettingTab {
                     this.plugin.settings.notePath = value;
                     await this.plugin.saveSettings();
                 })
-            );
-
-        containerEl.createEl('h2', { text: 'Behavior' });
-
-        new Setting(containerEl)
-            .setName('Show note selector')
-            .setDesc('If path is a folder containing at least two notes, a selector will allow you to choose the note; otherwise, all lists will be offered to you.')
-            .addToggle((toggle) => {
-                toggle.setValue(this.plugin.settings.showNoteSelector);
-                toggle.onChange(async (value) => {
-                    this.plugin.settings.showNoteSelector = value;
-                    await this.plugin.saveSettings();
-                })
-            });
-
-        new Setting(containerEl)
-            .setName('Show warning')
-            .setDesc('Are warnings displayed as notifications ? Note that warnings related to the reference limit are always displayed.')
-            .addToggle((toggle) => {
-                toggle.setValue(this.plugin.settings.showWarning);
-                toggle.onChange(async (value) => {
-                    this.plugin.settings.showWarning = value;
-                    await this.plugin.saveSettings();
-                })
-            });
-
-        new Setting(containerEl)
-            .setName('Delete selection value for notification')
-            .setDesc('If set, the selected value for notification is deleted.')
-            .addToggle((toggle) => {
-                toggle.setValue(this.plugin.settings.deleteSelectionForNotification);
-                toggle.onChange(async (value) => {
-                    this.plugin.settings.deleteSelectionForNotification = value;
-                    await this.plugin.saveSettings();
-                })
-            });
-
-        new Setting(containerEl)
-            .setName('Macro depth limit')
-            .setDesc('Macro recursion limit: how many nested macro calls are allowed. Zero prevents nested macros from being resolved.')
-            .addSlider((slider) =>
-                slider
-                    .setValue(this.plugin.settings.maxMacroDepth)
-                    .setLimits(0, 10, 1)
-                    .setDynamicTooltip()
-                    .onChange(async (value) => {
-                    this.plugin.settings.maxMacroDepth = value;
-                    await this.plugin.saveSettings();
-                    })
             );
 
             containerEl.createEl("h2", { text: "Specific values" });
@@ -1054,5 +1101,55 @@ class LIRPSettingTab extends PluginSettingTab {
                     await this.plugin.saveSettings();
                 })
             );
+
+        containerEl.createEl('h2', { text: 'Behavior' });
+
+        new Setting(containerEl)
+            .setName('Show note selector')
+            .setDesc('If path is a folder containing at least two notes, a selector will allow you to choose the note; otherwise, all lists will be offered to you.')
+            .addToggle((toggle) => {
+                toggle.setValue(this.plugin.settings.showNoteSelector);
+                toggle.onChange(async (value) => {
+                    this.plugin.settings.showNoteSelector = value;
+                    await this.plugin.saveSettings();
+                })
+            });
+
+        new Setting(containerEl)
+            .setName('Show warning')
+            .setDesc('Are warnings displayed as notifications ?')
+            .addToggle((toggle) => {
+                toggle.setValue(this.plugin.settings.showWarning);
+                toggle.onChange(async (value) => {
+                    this.plugin.settings.showWarning = value;
+                    await this.plugin.saveSettings();
+                })
+            });
+
+        new Setting(containerEl)
+            .setName('Delete selection value on notification')
+            .setDesc('If set, the selected value for notification is deleted when used.')
+            .addToggle((toggle) => {
+                toggle.setValue(this.plugin.settings.deleteSelectionForNotification);
+                toggle.onChange(async (value) => {
+                    this.plugin.settings.deleteSelectionForNotification = value;
+                    await this.plugin.saveSettings();
+                })
+            });
+
+        new Setting(containerEl)
+            .setName('Reference depth limit')
+            .setDesc('Reference recursion limit: how many nested reference calls are allowed. Zero prevents reference from being resolved.')
+            .addSlider((slider) =>
+                slider
+                    .setValue(this.plugin.settings.maxReferenceDepth)
+                    .setLimits(0, 10, 1)
+                    .setDynamicTooltip()
+                    .onChange(async (value) => {
+                    this.plugin.settings.maxReferenceDepth = value;
+                    await this.plugin.saveSettings();
+                    })
+            );
+
     }
 }
