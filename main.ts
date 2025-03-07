@@ -1054,7 +1054,7 @@ class LIRPSettingTab extends PluginSettingTab {
 
         new Setting(containerEl)
             .setName('Path')
-            .setDesc('The path of a note or a folder. Exemple : "Folder/Note" or "Folder".')
+            .setDesc('The path of a note or folder. Example: "Folder/Note" or "Folder".')
             .addText(text => text
                 .setPlaceholder('Enter the path to your note')
                 .setValue(this.plugin.settings.notePath)
@@ -1068,7 +1068,7 @@ class LIRPSettingTab extends PluginSettingTab {
     
             new Setting(containerEl)
                 .setName("Null value")
-                .setDesc("If the first line of an item has this value, the line is flush.")
+                .setDesc("If the first line of a list item has this value, that line is ignored. This allows you to have probabilities of getting no result. Usage example: having, or not having, a particle in a noun.")
                 .addText((text) => text
                     .setPlaceholder("Enter value")
                     .setValue(this.plugin.settings.nullValue)
@@ -1080,7 +1080,7 @@ class LIRPSettingTab extends PluginSettingTab {
 
             new Setting(containerEl)
                 .setName("Escape value")
-                .setDesc("If you want some headin one or first level list item in your item, you could escape them with these value")
+                .setDesc("To include heading one elements or first-level list items in your random list, escape them with these values. Exemple : // # Heading")
                 .addText((text) => text
                     .setPlaceholder("Enter value")
                     .setValue(this.plugin.settings.escapeValue)
@@ -1092,7 +1092,7 @@ class LIRPSettingTab extends PluginSettingTab {
 
             new Setting(containerEl)
                 .setName("Selection value for notification")
-                .setDesc("If the text selected has this value, the item is not inserted, but notified !")
+                .setDesc("If the selected text has this value, the item is not inserted; instead, a notification is shown.")
                 .addText((text) => text
                     .setPlaceholder("Enter value")
                     .setValue(this.plugin.settings.selectionForNotification)
@@ -1128,7 +1128,7 @@ class LIRPSettingTab extends PluginSettingTab {
 
         new Setting(containerEl)
             .setName('Delete selection value on notification')
-            .setDesc('If set, the selected value for notification is deleted when used.')
+            .setDesc('If this setting is on, the selected notification value is removed after it\'s used.')
             .addToggle((toggle) => {
                 toggle.setValue(this.plugin.settings.deleteSelectionForNotification);
                 toggle.onChange(async (value) => {
@@ -1139,7 +1139,7 @@ class LIRPSettingTab extends PluginSettingTab {
 
         new Setting(containerEl)
             .setName('Reference depth limit')
-            .setDesc('Reference recursion limit: how many nested reference calls are allowed. Zero prevents reference from being resolved.')
+            .setDesc('Reference recursion limit: the maximum number of nested reference calls allowed. Zero disables reference resolution.')
             .addSlider((slider) =>
                 slider
                     .setValue(this.plugin.settings.maxReferenceDepth)

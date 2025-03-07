@@ -3,7 +3,7 @@
 	"name": "List Item Random Picker",
 	"version": "1.0.7",
 	"minAppVersion": "0.15.0",
-	"description": "Allows you to insert a randomly chosen item from one of your lists, present in your notes! Thus you can create your own random tables for your TTRPG.",
+	"description": "Randomly select and insert items from your notes' lists. Perfect for creating your own TTRPG random tables.",
 	"author": "Alastor Pilkine",
 	"authorUrl": "https://github.com/AlastorPilkine",
 	"fundingUrl": "https://obsidian.md/pricing",
