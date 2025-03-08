@@ -4,7 +4,7 @@
 
 ## Overview
 
-The **List Item Random Picker Plugin** allows users to randomly select an item from a predefined list within an Obsidian note. 
+The **List Item Random Picker Plugin** allows users to randomly select an item from a predefined list within an Obsidian note.  
 This plugin was originally developed for Role-Playing Games (RPGs), where "random lists" are valuable tools for storytelling and decision-making.
 
 ## Features
@@ -39,7 +39,7 @@ In **Settings** > **Community Plugins** > **List Item Random Picker**:
 
 ### Creating a list
 
-The specified note should contain level-one headings (`# Heading`), each followed by a Markdown list. 
+The specified note should contain level-one headings (`# Heading`), each followed by a Markdown list.  
 The list can use bullet points (`-`), hyphens (`*`), or numbers (`1.`). 
 Each item can be plain text, Obsidian links (`[[ ... ]]`), or embedded previews (`![[ ... ]]`).
 
@@ -100,8 +100,12 @@ You can also quickly generate multiple random items by selecting a number in you
 1. Write a number in your note (e.g., `3`) and select this number
 2. Click the toolbar icon for this plugin.
 3. Select a title from the dropdown list.
-4. The selected number will be replaced by that many randomly chosen items from the list into your active note. 
+4. The selected number will be replaced by that many randomly chosen items from the list into your active note.
 
+If you select something following the number, this is the separator of the inserted element.
+
+
+### 
 ## License
 
 This project is licensed under the [GPLv3 License](https://github.com/AlastorPilkine/ListItemRandomPicker?tab=GPL-3.0-1-ov-file#GPL-3.0-1-ov-file).

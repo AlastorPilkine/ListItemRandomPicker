@@ -983,7 +983,7 @@ export default class ListItemRandomPicker extends Plugin {
             const noticeRegex = new RegExp(selectionForNotificationRegex);
             const selection = activeView.editor.getSelection();
             if (noticeRegex.test(selection)) {
-                this.logs.push('',listTitle,'showItem');
+                this.logs.push('','','showItem',note.pickRandomItemFromList(listTitle));
                 if (this.settings.deleteSelectionForNotification) {
                     activeView.editor.replaceSelection('');
                 }
