@@ -461,11 +461,9 @@ class LIRPNote implements LIRPNoteInterface {
     };
 
     clearComment(text: string): string {
-        // let textWithoutCommentLine = text.split('\n').filter(line => !line.trim().startsWith(this.commentString)).join('\n');
         const commentBlock = `${this.commentString}.*?(${this.commentString}|$)`;
         const commentBlockRegex = new RegExp(commentBlock, 'gs');
         return text.replace(commentBlockRegex, '');      
-        // return textWithoutCommentLine.replace(commentBlockRegex, '');      
     };
 
     loadFromNote(noteName: string, noteContent: string, ): boolean {
