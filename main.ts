@@ -24,18 +24,20 @@ interface LIRPPluginSettings {
     escapeValue: string;
     commentValue: string;
     showNoteSelector: boolean;
+    keepComment: boolean;
 };
 
 const DEFAULT_SETTINGS: LIRPPluginSettings = {
     notePath: 'Note or folder path',
     showWarning: true,
-    maxReferenceDepth: 1,
+    maxReferenceDepth: 3,
     selectionForNotification: '!',
     deleteSelectionForNotification: false,
     nullValue: 'null',
     escapeValue: '//',
     commentValue: '%%',
     showNoteSelector: true,
+    keepComment: true,
 };
 
 //-----------------------------------------------------------------
@@ -305,7 +307,7 @@ class LIRPList implements LIRPListInterface {
                 };
             });
             mdDescription = mdDescription.filter((element) => !(hideRegex.test(element)));
-            this.description = this.clearComment(mdDescription.join('\n'));
+            this.description = mdDescription.join('\n');
         } else {
             this.description = "";
         }
@@ -327,14 +329,6 @@ class LIRPList implements LIRPListInterface {
 
     flushLogs(): void {
         this.logs.flush()
-    };
-
-    clearComment(text: string): string {
-        // let textWithoutCommentLine = text.split('\n').filter(line => !line.trim().startsWith(this.commentString)).join('\n');
-        const commentBlock = `${this.commentString}.*?${this.commentString}`;
-        const commentBlockRegex = new RegExp(commentBlock, 'gs');
-        return text.replace(commentBlockRegex, '');      
-        // return textWithoutCommentLine.replace(commentBlockRegex, '');      
     };
 
     pushItemBasedOnWeight(item: string[]): void {
@@ -361,7 +355,7 @@ class LIRPList implements LIRPListInterface {
         });
         let stringItem = escapeItem.join('\n');
         for (let i = 0; i < repeat; i++) {
-            this.items.push(this.clearComment(stringItem));
+            this.items.push(stringItem);
         }
     };
 
@@ -429,9 +423,10 @@ class LIRPNote implements LIRPNoteInterface {
     escapeString: string;
     commentString: string;
     rollDice: boolean;
+    keepComment: boolean;
     referenceMaxDepth: number;
 
-    constructor (nullValue: string, escapeString: string, commentString: string, referenceMaxDepth: number) {
+    constructor (nullValue: string, escapeString: string, commentString: string, referenceMaxDepth: number, keepComment:boolean = false) {
         this.noteName = "";
         this.description = "";
         this.list = [];
@@ -441,6 +436,7 @@ class LIRPNote implements LIRPNoteInterface {
         this.commentString = commentString;
         this.rollDice = true;
         this.referenceMaxDepth = referenceMaxDepth;
+        this.keepComment = keepComment;
     };
 
     getListTitles() : string[] {
@@ -451,9 +447,22 @@ class LIRPNote implements LIRPNoteInterface {
         return listTitles;
     };
 
+    clearComment(text: string): string {
+        // let textWithoutCommentLine = text.split('\n').filter(line => !line.trim().startsWith(this.commentString)).join('\n');
+        const commentBlock = `${this.commentString}.*?(${this.commentString}|$)`;
+        const commentBlockRegex = new RegExp(commentBlock, 'gs');
+        return text.replace(commentBlockRegex, '');      
+        // return textWithoutCommentLine.replace(commentBlockRegex, '');      
+    };
+
     loadFromNote(noteName: string, noteContent: string, ): boolean {
         this.noteName = noteName;
-        const lines = noteContent.split('\n');
+        let lines:string[] = [];
+        if (this.keepComment) {
+            lines = noteContent.split('\n');
+        } else {
+            lines = this.clearComment(noteContent).split('\n');
+        }
         const headingRegex = /^# .+$/;
         let headingIndexes = findIndexes(lines, (element) => headingRegex.test(element));
         if (headingIndexes.length === 0) {
@@ -590,19 +599,21 @@ class LIRPMultiNote implements LIRPNoteInterface {
     escapeString: string;
     commentString: string;
     referenceMaxDepth: number;
+    keepComment: boolean;
     logs: LIRPLog;
 
-    constructor (nullValue: string, escapeString: string, commentString: string, referenceMaxDepth: number) {
+    constructor (nullValue: string, escapeString: string, commentString: string, referenceMaxDepth: number,keepComment: boolean) {
         this.multiNote = [];
         this.nullValue = nullValue;
         this.escapeString = escapeString;
         this.commentString = commentString;
         this.referenceMaxDepth = referenceMaxDepth;
+        this.keepComment = keepComment;
         this.logs = new LIRPLog();
     };
 
     loadFromNote(noteName: string, noteContent: string): boolean {
-        const currentNote = new LIRPNote(this.nullValue, this.escapeString, this.commentString, this.referenceMaxDepth);
+        const currentNote = new LIRPNote(this.nullValue, this.escapeString, this.commentString, this.referenceMaxDepth, this.keepComment);
         let status = currentNote.loadFromNote(noteName, noteContent);
         status = this.pushNoteIfListNotExists(currentNote) && status;
         return status;
@@ -893,7 +904,7 @@ export default class ListItemRandomPicker extends Plugin {
 
     async loadLIRPFiles(): Promise<LIRPMultiNote> {
         const allLIRPFiles = this.getLIRPFiles(this.settings.notePath);
-        let currentLIRP = new LIRPMultiNote(this.settings.nullValue, this.settings.escapeValue, this.settings.commentValue, this.settings.maxReferenceDepth);
+        let currentLIRP = new LIRPMultiNote(this.settings.nullValue, this.settings.escapeValue, this.settings.commentValue, this.settings.maxReferenceDepth, this.settings.keepComment);
 
         for (const currentFile of allLIRPFiles) {
             const currentFSObject = this.app.vault.getAbstractFileByPath(currentFile);
@@ -1153,6 +1164,18 @@ class LIRPSettingTab extends PluginSettingTab {
                     await this.plugin.saveSettings();
                 })
             });
+        
+            new Setting(containerEl)
+            .setName('Keep Obsidian comment')
+            .setDesc('Are Obsidian comments (via %%) preserved when we pick a random item, or are they deleted.')
+            .addToggle((toggle) => {
+                toggle.setValue(this.plugin.settings.keepComment);
+                toggle.onChange(async (value) => {
+                    this.plugin.settings.keepComment = value;
+                    await this.plugin.saveSettings();
+                })
+            });
+
 
         new Setting(containerEl)
             .setName('Reference depth limit')
