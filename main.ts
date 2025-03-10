@@ -426,7 +426,20 @@ class LIRPNote implements LIRPNoteInterface {
     keepComment: boolean;
     referenceMaxDepth: number;
 
-    constructor (nullValue: string, escapeString: string, commentString: string, referenceMaxDepth: number, keepComment:boolean = false) {
+    static getSettingString(value: '' | 'deleteComment' | 'deleteComment_ticked' = ''): string {
+        if (value === '') {
+            return '- [ ] Do not preserve comments\n'
+        } else {
+            switch (value) {
+                case 'deleteComment':
+                    return '^\- \\[[x ]\\] Do not preserve comments$';
+                case 'deleteComment_ticked':
+                    return '^\- \\[x\\] Do not preserve comments$';
+            };
+        };
+    };
+
+    constructor (nullValue: string, escapeString: string, commentString: string, referenceMaxDepth: number, keepComment: boolean = true) {
         this.noteName = "";
         this.description = "";
         this.list = [];
@@ -463,6 +476,12 @@ class LIRPNote implements LIRPNoteInterface {
         } else {
             lines = this.clearComment(noteContent).split('\n');
         }
+        if (lines[0] === '\n') {
+            // taking care of MD022
+            // Drop the first line of the noote if it's an empty one,
+            // because technically Note title is a heading one
+            lines.shift();
+        };
         const headingRegex = /^# .+$/;
         let headingIndexes = findIndexes(lines, (element) => headingRegex.test(element));
         if (headingIndexes.length === 0) {
@@ -473,7 +492,20 @@ class LIRPNote implements LIRPNoteInterface {
             // taking care of MD022
             //   MD022/blanks-around-headings: Headings should be surrounded by blank lines
             // Due to split on '\n', the slice, and at least a join on '\n' the last '\n' is always lost !
-            this.description = lines.slice(0, headingIndexes[0]).join('\n');
+                        
+            let mdDescription = lines.slice(0, headingIndexes[0]);
+            // WORK IN PROGRESS
+            // let keepComment: boolean = true;
+            // const deleteRegexTicked = new RegExp (LIRPNote.getSettingString('deleteComment_ticked'));
+            // const deleteRegex = new RegExp (LIRPNote.getSettingString('deleteComment'));
+            // mdDescription.map((element) => {
+            //     if (deleteRegexTicked.test(element)) {
+            //         keepComment = false;
+            //         this.keepComment = keepComment;
+            //     };
+            // });
+            // mdDescription = mdDescription.filter((element) => !(deleteRegex.test(element)));
+            this.description = mdDescription.join('\n');
         }
         const headingCount = headingIndexes.length;
         let pushSuccess:boolean = true;
@@ -510,8 +542,6 @@ class LIRPNote implements LIRPNoteInterface {
         let listTitle:string = "";
         const stringRefRegex: string = `\{(${this.list.map((element) => escapeRegex(element.title)).join('|')})\}`;
         for (let repeat = 0; repeat < this.referenceMaxDepth; repeat++) {
-            // returnOfDoExecSub = this.doReferenceSubstitution(randomItem);
-            // randomItem = returnOfDoExecSub.modifiedText;
             const refRegex = new RegExp (stringRefRegex,'mg');
             while ((match = refRegex.exec(modifiedText)) !== null) {
                 let newValue: string = this.pickRandomItemFromList(match[1], false); 
@@ -547,11 +577,9 @@ class LIRPNote implements LIRPNoteInterface {
         const currentList = this.list.find((element) => element.title === listTitle);
         if (currentList !== undefined) {
             randomItem = currentList.pickRandomItem();
-            // for (let repeat = 0; repeat < this.referenceMaxDepth; repeat++) {
             if (workOnReference) {
                 returnOfDoExecSub = this.doReferenceSubstitution(randomItem);
                 randomItem = returnOfDoExecSub.modifiedText;
-                // }
                 const stringRefRegex: string = `\{(${this.list.map((element) => escapeRegex(element.title)).join('|')})\}`;
                 const RefRegex = new RegExp (stringRefRegex);
                 if (RefRegex.test(randomItem) && workOnReference) {
@@ -817,6 +845,7 @@ export class LIRPSuggestModal extends SuggestModal<LIRPSuggestionInterface> {
     renderSuggestion(item: LIRPSuggestionInterface, el: HTMLElement) {
         el.createEl('div', { text: item.title });
         let message:string = item.description
+        // CHOICE TO DO
         // if (item.noteName !== item.title) {
         //     if (item.description !== '') {
         //         message = `${item.description}\n(from : ${item.noteName})`;
@@ -852,12 +881,21 @@ export default class ListItemRandomPicker extends Plugin {
         });
 
         this.addCommand({
-            id: 'insert-setting-item',
+            id: 'insert-list-setting-item',
             name: 'Insert list settings values',
             callback: () => {
                 this.insertString(LIRPList.getSettingString());
             }
         });
+
+        // WORK IN PROGRESS
+        // this.addCommand({
+        //     id: 'insert-note-setting-item',
+        //     name: 'Insert note settings values',
+        //     callback: () => {
+        //         this.insertString(LIRPNote.getSettingString());
+        //     }
+        // });
 
         this.addCommand({
             id: 'insert-reference-item',
@@ -919,6 +957,7 @@ export default class ListItemRandomPicker extends Plugin {
 
     async prepareAction(action: string): Promise<void> {
         const currentLIRP = await this.loadLIRPFiles();
+        console.log(currentLIRP);
         if (currentLIRP.length === 0) {
             this.logs.push('ListItemRandomPicker','loadLIRPFiles','pathSetting');
         };
