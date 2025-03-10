@@ -22,6 +22,7 @@ interface LIRPPluginSettings {
     deleteSelectionForNotification: boolean;
     nullValue: string;
     escapeValue: string;
+    commentValue: string;
     showNoteSelector: boolean;
 };
 
@@ -33,6 +34,7 @@ const DEFAULT_SETTINGS: LIRPPluginSettings = {
     deleteSelectionForNotification: false,
     nullValue: 'null',
     escapeValue: '//',
+    commentValue: '%%',
     showNoteSelector: true,
 };
 
@@ -241,6 +243,7 @@ class LIRPList implements LIRPListInterface {
     logs: LIRPLog;
     nullValue: string;
     escapeString: string;
+    commentString: string;
 
     static getSettingString(value: '' | 'hide' | 'hide_ticked' = ''): string {
         if (value === '') {
@@ -255,7 +258,7 @@ class LIRPList implements LIRPListInterface {
         };
     };
 
-    constructor(noteName: string, lines: string[], nullValue: string, escapeString: string) {
+    constructor(noteName: string, lines: string[], nullValue: string, escapeString: string, commentString: string) {
         this.title = "";
         this.description = "";
         this.hidden = false;
@@ -263,6 +266,7 @@ class LIRPList implements LIRPListInterface {
         this.logs = new LIRPLog();
         this.nullValue = nullValue;
         this.escapeString = escapeString;
+        this.commentString = commentString;
 
         const headingRegEx = /^# +(.+)$/;
         this.title = lines[0].replace(headingRegEx, "$1");
@@ -301,7 +305,7 @@ class LIRPList implements LIRPListInterface {
                 };
             });
             mdDescription = mdDescription.filter((element) => !(hideRegex.test(element)));
-            this.description = mdDescription.join('\n');
+            this.description = this.clearComment(mdDescription.join('\n'));
         } else {
             this.description = "";
         }
@@ -325,7 +329,15 @@ class LIRPList implements LIRPListInterface {
         this.logs.flush()
     };
 
-    pushItemBasedOnWeight(item: string[]) : void {
+    clearComment(text: string): string {
+        // let textWithoutCommentLine = text.split('\n').filter(line => !line.trim().startsWith(this.commentString)).join('\n');
+        const commentBlock = `${this.commentString}.*?${this.commentString}`;
+        const commentBlockRegex = new RegExp(commentBlock, 'gs');
+        return text.replace(commentBlockRegex, '');      
+        // return textWithoutCommentLine.replace(commentBlockRegex, '');      
+    };
+
+    pushItemBasedOnWeight(item: string[]): void {
         const ItemWithWeightRegEx = /^\((\d+)\)\s+(.+)$/;
         let regExExecution;
         let repeat: number;
@@ -342,14 +354,14 @@ class LIRPList implements LIRPListInterface {
                 item.shift()
             };
         };
-        const stringRegex = `^ *${this.escapeString}(.*)`;
-        const escapeStringRegEx = new RegExp(stringRegex, 'gm');
+        const escapeStringRegex = `^ *${this.escapeString}(.*)`;
+        const escapeStringRegEx = new RegExp(escapeStringRegex, 'gm');
         const escapeItem = item.map((element) => {
             return element.replace(escapeStringRegEx, '$1');
         });
-        const stringItem = escapeItem.join('\n');
+        let stringItem = escapeItem.join('\n');
         for (let i = 0; i < repeat; i++) {
-            this.items.push(stringItem);
+            this.items.push(this.clearComment(stringItem));
         }
     };
 
@@ -415,16 +427,18 @@ class LIRPNote implements LIRPNoteInterface {
     logs: LIRPLog;
     nullValue: string;
     escapeString: string;
+    commentString: string;
     rollDice: boolean;
     referenceMaxDepth: number;
 
-    constructor (nullValue: string, escapeString: string, referenceMaxDepth: number) {
+    constructor (nullValue: string, escapeString: string, commentString: string, referenceMaxDepth: number) {
         this.noteName = "";
         this.description = "";
         this.list = [];
         this.logs = new LIRPLog();
         this.nullValue = nullValue;
         this.escapeString = escapeString;
+        this.commentString = commentString;
         this.rollDice = true;
         this.referenceMaxDepth = referenceMaxDepth;
     };
@@ -455,9 +469,9 @@ class LIRPNote implements LIRPNoteInterface {
         const headingCount = headingIndexes.length;
         let pushSuccess:boolean = true;
         for (let currentIndex = 0; currentIndex < (headingCount - 1); currentIndex++) {
-                pushSuccess = this.pushListIfNotExists(new LIRPList(this.noteName, lines.slice(headingIndexes[currentIndex], headingIndexes[currentIndex + 1]), this.nullValue, this.escapeString)) && pushSuccess;
+                pushSuccess = this.pushListIfNotExists(new LIRPList(this.noteName, lines.slice(headingIndexes[currentIndex], headingIndexes[currentIndex + 1]), this.nullValue, this.escapeString, this.commentString)) && pushSuccess;
         };
-         pushSuccess = this.pushListIfNotExists(new LIRPList(this.noteName, lines.slice(headingIndexes[headingCount - 1]), this.nullValue, this.escapeString)) && pushSuccess;
+         pushSuccess = this.pushListIfNotExists(new LIRPList(this.noteName, lines.slice(headingIndexes[headingCount - 1]), this.nullValue, this.escapeString, this.commentString)) && pushSuccess;
          return pushSuccess;
     };
 
@@ -574,19 +588,21 @@ class LIRPMultiNote implements LIRPNoteInterface {
     multiNote: LIRPNote[];
     nullValue: string;
     escapeString: string;
+    commentString: string;
     referenceMaxDepth: number;
     logs: LIRPLog;
 
-    constructor (nullValue: string, escapeString: string, referenceMaxDepth: number) {
+    constructor (nullValue: string, escapeString: string, commentString: string, referenceMaxDepth: number) {
         this.multiNote = [];
         this.nullValue = nullValue;
         this.escapeString = escapeString;
+        this.commentString = commentString;
         this.referenceMaxDepth = referenceMaxDepth;
         this.logs = new LIRPLog();
     };
 
     loadFromNote(noteName: string, noteContent: string): boolean {
-        const currentNote = new LIRPNote(this.nullValue, this.escapeString, this.referenceMaxDepth);
+        const currentNote = new LIRPNote(this.nullValue, this.escapeString, this.commentString, this.referenceMaxDepth);
         let status = currentNote.loadFromNote(noteName, noteContent);
         status = this.pushNoteIfListNotExists(currentNote) && status;
         return status;
@@ -651,7 +667,7 @@ class LIRPMultiNote implements LIRPNoteInterface {
     };
 
     doReferenceSubstitution(text: string):string {
-        let superNote = new LIRPNote(this.nullValue, this.escapeString, this.referenceMaxDepth);
+        let superNote = new LIRPNote(this.nullValue, this.escapeString, this.commentString, this.referenceMaxDepth);
         this.multiNote.map((element) => {
             superNote.list = superNote.list.concat(element.list);
         });
@@ -670,7 +686,7 @@ class LIRPMultiNote implements LIRPNoteInterface {
     };
 
     pickRandomItemFromList(listTitle: string, workOnReference: boolean = true): string {
-        let superNote = new LIRPNote(this.nullValue, this.escapeString, this.referenceMaxDepth);
+        let superNote = new LIRPNote(this.nullValue, this.escapeString, this.commentString, this.referenceMaxDepth);
         superNote.noteName = this.getNoteNameFromListTitle(listTitle);
         this.multiNote.map((element) => {
             superNote.list = superNote.list.concat(element.list);
@@ -877,7 +893,7 @@ export default class ListItemRandomPicker extends Plugin {
 
     async loadLIRPFiles(): Promise<LIRPMultiNote> {
         const allLIRPFiles = this.getLIRPFiles(this.settings.notePath);
-        let currentLIRP = new LIRPMultiNote(this.settings.nullValue, this.settings.escapeValue, this.settings.maxReferenceDepth);
+        let currentLIRP = new LIRPMultiNote(this.settings.nullValue, this.settings.escapeValue, this.settings.commentValue, this.settings.maxReferenceDepth);
 
         for (const currentFile of allLIRPFiles) {
             const currentFSObject = this.app.vault.getAbstractFileByPath(currentFile);
@@ -977,6 +993,7 @@ export default class ListItemRandomPicker extends Plugin {
     };
 
     workWithTitle(note: LIRPMultiNote, listTitle: string): void {
+        console.log(note);
         const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
         if (activeView) {
             const selectionForNotificationRegex:string = `^${this.settings.selectionForNotification}$`;
