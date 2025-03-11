@@ -12,7 +12,9 @@ function findIndexes<T>(anArray: T[], predicate: (element: T, index: number) => 
 
 function indexBetweenFindIndexes(index: number, indexes: number[]): boolean {
     let isBeetween:boolean = false;
-    // tester longueur impair et index supérieur valeur dernier indexes
+    if ((indexes.length % 2 !== 0) && (index >= indexes[indexes.length - 1])) {
+        return true;
+    };
     for (let i=0; i < (indexes.length - 2); i = i +2) {
         if ((indexes[i] <= index) && (index <= indexes[i+1])) {
             return true;
@@ -34,7 +36,6 @@ interface LIRPPluginSettings {
     escapeValue: string;
     commentValue: string;
     showNoteSelector: boolean;
-    keepComment: boolean;
 };
 
 const DEFAULT_SETTINGS: LIRPPluginSettings = {
@@ -47,7 +48,6 @@ const DEFAULT_SETTINGS: LIRPPluginSettings = {
     escapeValue: '//',
     commentValue: '%%',
     showNoteSelector: true,
-    keepComment: true,
 };
 
 //-----------------------------------------------------------------
@@ -449,7 +449,7 @@ class LIRPNote implements LIRPNoteInterface {
         };
     };
 
-    constructor (nullValue: string, escapeString: string, commentString: string, referenceMaxDepth: number, keepComment: boolean = true) {
+    constructor (nullValue: string, escapeString: string, commentString: string, referenceMaxDepth: number) {
         this.noteName = "";
         this.description = "";
         this.list = [];
@@ -459,7 +459,7 @@ class LIRPNote implements LIRPNoteInterface {
         this.commentString = commentString;
         this.rollDice = true;
         this.referenceMaxDepth = referenceMaxDepth;
-        this.keepComment = keepComment;
+        this.keepComment = true;
     };
 
     getListTitles() : string[] {
@@ -684,21 +684,19 @@ class LIRPMultiNote implements LIRPNoteInterface {
     escapeString: string;
     commentString: string;
     referenceMaxDepth: number;
-    keepComment: boolean;
     logs: LIRPLog;
 
-    constructor (nullValue: string, escapeString: string, commentString: string, referenceMaxDepth: number,keepComment: boolean) {
+    constructor (nullValue: string, escapeString: string, commentString: string, referenceMaxDepth: number) {
         this.multiNote = [];
         this.nullValue = nullValue;
         this.escapeString = escapeString;
         this.commentString = commentString;
         this.referenceMaxDepth = referenceMaxDepth;
-        this.keepComment = keepComment;
         this.logs = new LIRPLog();
     };
 
     loadFromNote(noteName: string, noteContent: string): boolean {
-        const currentNote = new LIRPNote(this.nullValue, this.escapeString, this.commentString, this.referenceMaxDepth, this.keepComment);
+        const currentNote = new LIRPNote(this.nullValue, this.escapeString, this.commentString, this.referenceMaxDepth);
         let status = currentNote.loadFromNote(noteName, noteContent);
         status = this.pushNoteIfListNotExists(currentNote) && status;
         return status;
@@ -998,7 +996,7 @@ export default class ListItemRandomPicker extends Plugin {
 
     async loadLIRPFiles(): Promise<LIRPMultiNote> {
         const allLIRPFiles = this.getLIRPFiles(this.settings.notePath);
-        let currentLIRP = new LIRPMultiNote(this.settings.nullValue, this.settings.escapeValue, this.settings.commentValue, this.settings.maxReferenceDepth, this.settings.keepComment);
+        let currentLIRP = new LIRPMultiNote(this.settings.nullValue, this.settings.escapeValue, this.settings.commentValue, this.settings.maxReferenceDepth);
 
         for (const currentFile of allLIRPFiles) {
             const currentFSObject = this.app.vault.getAbstractFileByPath(currentFile);
