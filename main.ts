@@ -1257,18 +1257,6 @@ class LIRPSettingTab extends PluginSettingTab {
                     await this.plugin.saveSettings();
                 })
             });
-        
-            new Setting(containerEl)
-            .setName('Keep Obsidian comment')
-            .setDesc('Are Obsidian comments (via %%) preserved when we pick a random item, or are they deleted.')
-            .addToggle((toggle) => {
-                toggle.setValue(this.plugin.settings.keepComment);
-                toggle.onChange(async (value) => {
-                    this.plugin.settings.keepComment = value;
-                    await this.plugin.saveSettings();
-                })
-            });
-
 
         new Setting(containerEl)
             .setName('Reference depth limit')
