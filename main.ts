@@ -1,5 +1,4 @@
-import { Console } from 'console';
-import { App, SuggestModal, Notice, Plugin, PluginSettingTab, Setting, TFile, TFolder, MarkdownView} from 'obsidian';
+import { App, SuggestModal, Notice, Plugin, PluginSettingTab, Setting, TFile, MarkdownView} from 'obsidian';
 
 function findIndexes<T>(anArray: T[], predicate: (element: T, index: number) => boolean): number[] {
     const indexes: number[] = [];
@@ -9,6 +8,17 @@ function findIndexes<T>(anArray: T[], predicate: (element: T, index: number) => 
       }
     });
     return indexes;
+};
+
+function indexBetweenFindIndexes(index: number, indexes: number[]): boolean {
+    let isBeetween:boolean = false;
+    // tester longueur impair et index supérieur valeur dernier indexes
+    for (let i=0; i < (indexes.length - 2); i = i +2) {
+        if ((indexes[i] <= index) && (index <= indexes[i+1])) {
+            return true;
+        }
+    }
+    return isBeetween;
 };
 
 function escapeRegex(stringToEscape: string): string {
@@ -460,6 +470,54 @@ class LIRPNote implements LIRPNoteInterface {
         return listTitles;
     };
 
+    workWithComment (text: string): string {
+        // let's define regex
+        const tickSettingRegEx = new RegExp(LIRPNote.getSettingString('deleteComment_ticked'));
+        const headingRegex = /^# .+$/;
+        const commentLineString = `^${this.commentString}$`;
+        const commentLineRegex = new RegExp(commentLineString);
+        const commentBlock = `${this.commentString}.*?${this.commentString}`;
+        const commentBlockRegex = new RegExp(commentBlock);
+        // let's find settings
+        const lines = text.split('\n');
+        const settingIndex = findIndexes(lines,(element) => tickSettingRegEx.test(element));
+        const commentLineIndex = findIndexes(lines,(element) => commentLineRegex.test(element));
+        const headingIndex = findIndexes(lines,(element) => headingRegex.test(element));
+        // si pas de titre on touche à rien
+        if (headingIndex.length === 0) {
+            return text;
+        };
+        if ((settingIndex.length === 0) || (settingIndex[0] > headingIndex[0])) {
+            // si pas de settings ou settings après le premier titre 1
+            this.keepComment = true;
+        } else {
+            // intégrer indexBetweenFindIndexes
+            this.keepComment = indexBetweenFindIndexes(settingIndex[0],commentLineIndex)
+            // sinon keepinde
+        }
+        let insideComment = false;
+        const newLines:string[] = [];
+        lines.map((element) => {
+            let isACommentLine = false;
+            if (commentLineRegex.test(element)) {
+                insideComment = !insideComment;
+                isACommentLine = true;
+            }
+            if (insideComment || isACommentLine) {
+                if (this.keepComment) {
+                    newLines.push(this.escapeString + element);
+                };
+            } else {
+                if (this.keepComment) {
+                    newLines.push(element);
+                } else {
+                    newLines.push(element.replace(commentBlockRegex,''));
+                };
+            };
+        });
+        return newLines.join('\n');
+    };
+
     clearComment(text: string): string {
         const commentBlock = `${this.commentString}.*?(${this.commentString}|$)`;
         const commentBlockRegex = new RegExp(commentBlock, 'gs');
@@ -469,11 +527,12 @@ class LIRPNote implements LIRPNoteInterface {
     loadFromNote(noteName: string, noteContent: string, ): boolean {
         this.noteName = noteName;
         let lines:string[] = [];
-        if (this.keepComment) {
-            lines = noteContent.split('\n');
-        } else {
-            lines = this.clearComment(noteContent).split('\n');
-        }
+        // if (this.keepComment) {
+        //     lines = noteContent.split('\n');
+        // } else {
+        //     lines = this.clearComment(noteContent).split('\n');
+        // }
+        lines = this.workWithComment(noteContent).split('\n');
         if (lines[0] === '\n') {
             // taking care of MD022
             // Drop the first line of the noote if it's an empty one,
@@ -886,14 +945,13 @@ export default class ListItemRandomPicker extends Plugin {
             }
         });
 
-        // WORK IN PROGRESS
-        // this.addCommand({
-        //     id: 'insert-note-setting-item',
-        //     name: 'Insert note settings values',
-        //     callback: () => {
-        //         this.insertString(LIRPNote.getSettingString());
-        //     }
-        // });
+        this.addCommand({
+            id: 'insert-note-setting-item',
+            name: 'Insert note settings values',
+            callback: () => {
+                this.insertString(LIRPNote.getSettingString());
+            }
+        });
 
         this.addCommand({
             id: 'insert-reference-item',
@@ -955,7 +1013,6 @@ export default class ListItemRandomPicker extends Plugin {
 
     async prepareAction(action: string): Promise<void> {
         const currentLIRP = await this.loadLIRPFiles();
-        console.log(currentLIRP);
         if (currentLIRP.length === 0) {
             this.logs.push('ListItemRandomPicker','loadLIRPFiles','pathSetting');
         };
@@ -1041,7 +1098,6 @@ export default class ListItemRandomPicker extends Plugin {
     };
 
     workWithTitle(note: LIRPMultiNote, listTitle: string): void {
-        console.log(note);
         const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
         if (activeView) {
             const selectionForNotificationRegex:string = `^${this.settings.selectionForNotification}$`;
