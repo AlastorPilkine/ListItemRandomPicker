@@ -257,15 +257,17 @@ class LIRPList implements LIRPListInterface {
     escapeString: string;
     commentString: string;
 
-    static getSettingString(value: '' | 'hide' | 'hide_ticked' = ''): string {
+    static getSettingString(value: '' | 'hide' | 'hide_string' | 'hide_ticked' = ''): string {
         if (value === '') {
             return '- [ ] Hide this list\n'
         } else {
             switch (value) {
                 case 'hide':
-                    return '^\- \\[[x ]\\] Hide this list$';
+                    return '^\- \\[[x \\?]\\] Hide this list$';
+                case 'hide_string':
+                    return '\- \\[[x ?]\\] Hide this list';
                 case 'hide_ticked':
-                    return '^\- \\[x\\] Hide this list$';
+                    return '^\- \\[[x?]\\] Hide this list$';
             };
         };
     };
@@ -283,7 +285,8 @@ class LIRPList implements LIRPListInterface {
         const headingRegEx = /^# +(.+)$/;
         this.title = lines[0].replace(headingRegEx, "$1");
         lines.shift();
-        const listBeginItemRegex = /^ {0,3}(-|\d+\.) (?!\[) *(.+)$/;
+        const listBeginItemString = `^(?!${LIRPList.getSettingString('hide_string')}) {0,3}(-|\\d+\.|\\*) *(.+)$`;
+        const listBeginItemRegex = new RegExp(listBeginItemString);
         const listBeginIndexes = findIndexes(lines, (element) => listBeginItemRegex.test(element));
         if (listBeginIndexes.length === 0) {
             this.logs.push(noteName, this.title, 'emptyList');
@@ -442,9 +445,9 @@ class LIRPNote implements LIRPNoteInterface {
         } else {
             switch (value) {
                 case 'deleteComment':
-                    return '^\- \\[[x ]\\] Do not preserve comments$';
+                    return '^\- \\[[x ?]\\] Do not preserve comments$';
                 case 'deleteComment_ticked':
-                    return '^\- \\[x\\] Do not preserve comments$';
+                    return '^\- \\[[x?]\\] Do not preserve comments$';
             };
         };
     };
