@@ -285,7 +285,7 @@ class LIRPList implements LIRPListInterface {
         const headingRegEx = /^# +(.+)$/;
         this.title = lines[0].replace(headingRegEx, "$1");
         lines.shift();
-        const listBeginItemString = `^(?!${LIRPList.getSettingString('hide_string')}) {0,3}(-|\\d+\.|\\*) *(.+)$`;
+        const listBeginItemString = `^(?!${LIRPList.getSettingString('hide_string')}) {0,3}(-|\\d+\.|\\*) +(.+)$`;
         const listBeginItemRegex = new RegExp(listBeginItemString);
         const listBeginIndexes = findIndexes(lines, (element) => listBeginItemRegex.test(element));
         if (listBeginIndexes.length === 0) {
