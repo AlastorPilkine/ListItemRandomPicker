@@ -1,5 +1,7 @@
 import { App, SuggestModal, Notice, Plugin, PluginSettingTab, Setting, TFile, MarkdownView} from 'obsidian';
 
+//-----------------------------------------------------------------
+
 function findIndexes<T>(anArray: T[], predicate: (element: T, index: number) => boolean): number[] {
     const indexes: number[] = [];
     anArray.forEach((element, index) => {
@@ -10,10 +12,12 @@ function findIndexes<T>(anArray: T[], predicate: (element: T, index: number) => 
     return indexes;
 };
 
-function indexBetweenFindIndexes(index: number, indexes: number[]): boolean {
+function indexIsBetweenFindIndexes(index: number, indexes: number[], lastCouldBeOpen:boolean = false): boolean {
     let isBeetween:boolean = false;
-    if ((indexes.length % 2 !== 0) && (index >= indexes[indexes.length - 1])) {
-        return true;
+    if (lastCouldBeOpen) {
+        if ((indexes.length % 2 !== 0) && (index >= indexes[indexes.length - 1])) {
+            return true;
+        };
     };
     for (let i=0; i < (indexes.length - 2); i = i +2) {
         if ((indexes[i] <= index) && (index <= indexes[i+1])) {
@@ -25,29 +29,6 @@ function indexBetweenFindIndexes(index: number, indexes: number[]): boolean {
 
 function escapeRegex(stringToEscape: string): string {
     return stringToEscape.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-};
-interface LIRPPluginSettings {
-    notePath: string;
-    showWarning: boolean;
-    maxReferenceDepth: number;
-    selectionForNotification: string;
-    deleteSelectionForNotification: boolean;
-    nullValue: string;
-    escapeValue: string;
-    commentValue: string;
-    showNoteSelector: boolean;
-};
-
-const DEFAULT_SETTINGS: LIRPPluginSettings = {
-    notePath: 'Note or folder path',
-    showWarning: true,
-    maxReferenceDepth: 3,
-    selectionForNotification: '!',
-    deleteSelectionForNotification: false,
-    nullValue: 'null',
-    escapeValue: '//',
-    commentValue: '%%',
-    showNoteSelector: true,
 };
 
 //-----------------------------------------------------------------
@@ -201,6 +182,7 @@ class LIRPLogElement {
         return `${this.getType()} / ${this.father} / ${this.child} / ${this.status} / ${this.complement}`;
     };
 };
+
 class LIRPLog {
     logs: LIRPLogElement[];
 
@@ -244,8 +226,7 @@ interface LIRPListInterface {
     notHidden(): boolean;
     pickRandomItem(): string;
     getLogs(): LIRPLog;
-    getWarning(): string[];
-}
+};
 
 class LIRPList implements LIRPListInterface {
     title: string;
@@ -397,22 +378,18 @@ class LIRPList implements LIRPListInterface {
         return this.logs;
     };
 
-    getWarning(): string[] {
-        return this.logs.get('warning');
-    };
-
     get length(): number {
         return this.items.length;
     };
 
-}
+};
 
 //-----------------------------------------------------------------
 
 interface LIRPDoRefSubInterface {
     lastListTitle: string;
     modifiedText: string;
-}
+};
 
 //-----------------------------------------------------------------
 
@@ -420,12 +397,10 @@ interface LIRPNoteInterface {
     loadFromNote(noteName: string, noteContent: string): boolean;
     getListSuggestion(): LIRPSuggestionList;
     pickRandomItemFromList(listTitle: string, workOnReference: boolean): string; 
-    getError(): string[];
-    getWarning(): string[];
     getLogs(): LIRPLog;
     getListTitles() : string[];
     flushLogs(): void;
-}
+};
 
 class LIRPNote implements LIRPNoteInterface {
     noteName: string;
@@ -474,7 +449,7 @@ class LIRPNote implements LIRPNoteInterface {
     };
 
     workWithComment (text: string): string {
-        // let's define regex
+        // let's define some regex
         const tickSettingRegEx = new RegExp(LIRPNote.getSettingString('deleteComment_ticked'));
         const headingRegex = /^# .+$/;
         const commentLineString = `^${this.commentString}$`;
@@ -495,7 +470,7 @@ class LIRPNote implements LIRPNoteInterface {
             this.keepComment = true;
         } else {
             // intégrer indexBetweenFindIndexes
-            this.keepComment = indexBetweenFindIndexes(settingIndex[0],commentLineIndex)
+            this.keepComment = indexIsBetweenFindIndexes(settingIndex[0],commentLineIndex)
             // sinon keepinde
         }
         let insideComment = false;
@@ -521,24 +496,13 @@ class LIRPNote implements LIRPNoteInterface {
         return newLines.join('\n');
     };
 
-    clearComment(text: string): string {
-        const commentBlock = `${this.commentString}.*?(${this.commentString}|$)`;
-        const commentBlockRegex = new RegExp(commentBlock, 'gs');
-        return text.replace(commentBlockRegex, '');      
-    };
-
     loadFromNote(noteName: string, noteContent: string, ): boolean {
         this.noteName = noteName;
         let lines:string[] = [];
-        // if (this.keepComment) {
-        //     lines = noteContent.split('\n');
-        // } else {
-        //     lines = this.clearComment(noteContent).split('\n');
-        // }
         lines = this.workWithComment(noteContent).split('\n');
         if (lines[0] === '\n') {
             // taking care of MD022
-            // Drop the first line of the noote if it's an empty one,
+            // Drop the first line of the note if it's an empty one,
             // because technically Note title is a heading one
             lines.shift();
         };
@@ -551,20 +515,10 @@ class LIRPNote implements LIRPNoteInterface {
         if (headingIndexes[0] !== 0) {
             // taking care of MD022
             //   MD022/blanks-around-headings: Headings should be surrounded by blank lines
-            // Due to split on '\n', the slice, and at least a join on '\n' the last '\n' is always lost !
-                        
+            // Due to split on '\n', the slice, and at least a join on '\n' the last '\n' is always lost !                        
             let mdDescription = lines.slice(0, headingIndexes[0]);
-            // WORK IN PROGRESS
-            // let keepComment: boolean = true;
-            // const deleteRegexTicked = new RegExp (LIRPNote.getSettingString('deleteComment_ticked'));
-            // const deleteRegex = new RegExp (LIRPNote.getSettingString('deleteComment'));
-            // mdDescription.map((element) => {
-            //     if (deleteRegexTicked.test(element)) {
-            //         keepComment = false;
-            //         this.keepComment = keepComment;
-            //     };
-            // });
-            // mdDescription = mdDescription.filter((element) => !(deleteRegex.test(element)));
+            const deleteRegex = new RegExp (LIRPNote.getSettingString('deleteComment'));
+            mdDescription = mdDescription.filter((element) => !(deleteRegex.test(element)));
             this.description = mdDescription.join('\n');
         }
         const headingCount = headingIndexes.length;
@@ -608,12 +562,12 @@ class LIRPNote implements LIRPNoteInterface {
                 listTitle = match[0];
                 modifiedText = modifiedText.replace(listTitle, newValue);
                 refRegex.lastIndex = match.index + newValue.length;
-            }
-        }
+            };
+        };
         if (this.rollDice) {
             const diceRoller = new DiceRoller();
             modifiedText = diceRoller.replaceDiceRolls(modifiedText,'{','}');
-        }
+        };
 
         return {
             lastListTitle: listTitle,
@@ -655,10 +609,6 @@ class LIRPNote implements LIRPNoteInterface {
         };
     };
 
-    getError(): string[] {
-        return this.logs.get('error');
-    };
-
     getLogs(): LIRPLog {
         let allLogs = new LIRPLog;
         allLogs.add(this.logs);
@@ -668,18 +618,10 @@ class LIRPNote implements LIRPNoteInterface {
         return allLogs;
     };
 
-    getWarning(): string[] {
-        let allWarning: string[] = this.logs.get('warning');
-        this.list.forEach((element) => {
-            allWarning = allWarning.concat(element.getWarning());
-        });
-        return allWarning
-    };
-
     get length(): number {
         return this.list.length;
     };
-}
+};
 
 class LIRPMultiNote implements LIRPNoteInterface {
     multiNote: LIRPNote[];
@@ -800,14 +742,6 @@ class LIRPMultiNote implements LIRPNoteInterface {
         });
     };
 
-    getError(): string[] {
-        let allError:string[] = [];
-        this.multiNote.map((element) => {
-            allError = allError.concat(element.getError());
-        });
-        return allError;
-    };
-
     getLogs(): LIRPLog {
         let allLogs = new LIRPLog;
         allLogs.add(this.logs);
@@ -822,25 +756,19 @@ class LIRPMultiNote implements LIRPNoteInterface {
         return (allLogs.get('error').length !== 0) ;
     };
 
-    getWarning(): string[] {
-        let allWarning:string[] = this.logs.get('warning');
-        this.multiNote.map((element) => {
-            allWarning = allWarning.concat(element.getWarning());
-        });
-        return allWarning;
-    };
-
     get length(): number {
         return this.multiNote.length;
     };
 
 };
 
+//-----------------------------------------------------------------
+
 interface LIRPSuggestionInterface {
     noteName: string;
     title: string;
     description: string;
-}
+};
 
 class LIRPSuggestionList {
     list: LIRPSuggestionInterface[];
@@ -868,8 +796,8 @@ class LIRPSuggestionList {
         for (let i = 0; i < this.list.length; i++) {
             if (callback(this.list[i], i, this.list)) {
                 filteredList.push(this.list[i]);
-            }
-        }
+            };
+        };
         return filteredList;
     };
 
@@ -883,6 +811,8 @@ class LIRPSuggestionList {
         return this.list.length;
     };
 }
+
+//-----------------------------------------------------------------
 
 export class LIRPSuggestModal extends SuggestModal<LIRPSuggestionInterface> {
     items: LIRPSuggestionList;
@@ -903,7 +833,7 @@ export class LIRPSuggestModal extends SuggestModal<LIRPSuggestionInterface> {
     renderSuggestion(item: LIRPSuggestionInterface, el: HTMLElement) {
         el.createEl('div', { text: item.title });
         let message:string = item.description
-        // CHOICE TO DO
+        // CHOICE TO DO : Display note path and name when no note selector ?
         // if (item.noteName !== item.title) {
         //     if (item.description !== '') {
         //         message = `${item.description}\n(from : ${item.noteName})`;
@@ -917,6 +847,32 @@ export class LIRPSuggestModal extends SuggestModal<LIRPSuggestionInterface> {
       onChooseSuggestion(item: LIRPSuggestionInterface, evt: MouseEvent | KeyboardEvent) {
         this.callback(item);
       };
+};
+
+//-----------------------------------------------------------------
+
+interface LIRPPluginSettings {
+    notePath: string;
+    nullValue: string;
+    escapeValue: string;
+    selectionForNotification: string;
+    showNoteSelector: boolean;
+    showWarning: boolean;
+    deleteSelectionForNotification: boolean;
+    maxReferenceDepth: number;
+    commentValue: string;
+};
+
+const DEFAULT_SETTINGS: LIRPPluginSettings = {
+    notePath: 'Note or folder path',
+    nullValue: 'null',
+    escapeValue: '//',
+    selectionForNotification: '!',
+    showNoteSelector: true,
+    showWarning: true,
+    deleteSelectionForNotification: false,
+    maxReferenceDepth: 3,
+    commentValue: '%%',
 };
 
 export default class ListItemRandomPicker extends Plugin {
