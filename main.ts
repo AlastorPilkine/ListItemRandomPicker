@@ -500,7 +500,7 @@ class LIRPNote implements LIRPNoteInterface {
         this.noteName = noteName;
         let lines:string[] = [];
         lines = this.workWithComment(noteContent).split('\n');
-        if (lines[0] === '\n') {
+        if (lines[0] === '') {
             // taking care of MD022
             // Drop the first line of the note if it's an empty one,
             // because technically Note title is a heading one
