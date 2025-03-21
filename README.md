@@ -8,7 +8,7 @@ Your lists are in Markdown format, making them easy to create, but this plugin o
 
 Finally, your lists can contain Markdown, including Markdown that is recognized by other plugins!
 
-![functionnality](./docs/LIRP%201%20-%20Create%20some%20lists.gif)
+![functionnality](./docs/LIRP.gif)
 
 In the rest of this document, this plugin will be referred to by its acronym, LIRP.
 
