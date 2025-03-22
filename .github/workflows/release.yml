@@ -20,7 +20,6 @@ jobs:
 
       - name: Build plugin
         run: |
-          cd /home/runner/work/ListItemRandomPicker
           npm install
           npm run build
 
