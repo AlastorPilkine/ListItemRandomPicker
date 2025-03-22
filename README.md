@@ -249,11 +249,11 @@ With escaping:
 
 The plugin has three types of settings: plugin settings, list settings, and note settings.
 
-![settings](./docs/settings.png)
-
 ### Plugin Settings
 
 These settings affect the overall behavior of the plugin.
+
+![settings](./docs/settings.png)
 
 * **Path :** The path of a note or folder. Example: "Folder/Note" or "Folder"
 
