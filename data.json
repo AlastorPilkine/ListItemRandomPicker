@@ -1,0 +1,11 @@
+{
+  "notePath": "Table",
+  "nullValue": "null",
+  "escapeValue": "//",
+  "selectionForNotification": "!",
+  "showNoteSelector": true,
+  "showWarning": true,
+  "deleteSelectionForNotification": false,
+  "maxReferenceDepth": 10,
+  "commentValue": "%%"
+}
