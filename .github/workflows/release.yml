@@ -18,11 +18,9 @@ jobs:
         with:
           node-version: "18.x"
 
-      - name: Change directory to plugin root
-        run: cd /home/runner/work/ListItemRandomPicker
-
       - name: Build plugin
         run: |
+          cd /home/runner/work/ListItemRandomPicker
           npm install
           npm run build
 
