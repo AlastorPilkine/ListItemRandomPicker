@@ -1,11 +1,11 @@
 {
 	"id": "list-item-random-picker",
 	"name": "List Item Random Picker",
-	"version": "1.0.7",
+	"version": "1.0.0",
 	"minAppVersion": "0.15.0",
 	"description": "Randomly select and insert items from your notes' lists. Perfect for creating your own TTRPG random tables.",
 	"author": "Alastor Pilkine",
 	"authorUrl": "https://github.com/AlastorPilkine",
-	"fundingUrl": "https://obsidian.md/pricing",
+	"fundingUrl": "https://buymeacoffee.com/alastorpilkine",
 	"isDesktopOnly": false
 }
