@@ -118,6 +118,42 @@ This will randomly generate character names like "Mr. John Duke Smith", "Ms. Mar
 - Thanks to the null value in the "Titles of Nobility" list, it is possible that no title will be drawn, resulting in names like "Mr. John Smith" or "Ms. Mary Johnson".
 - You can chain nested combinations, i.e., combine list references that themselves contain references, etc. The maximum level of nesting is configurable in the [settings](#settings).
 
+## Dice Roll
+
+This plugin supports a flexible dice roll syntax that can be used in lists items using the format `{dice syntax}`.
+
+### Syntax Breakdown
+
+The dice roll syntax follows this pattern: `[count]d[sides][modifier][explode][keep][keepLow]`
+
+* **`[count]` (Optional):** The number of dice to roll. Defaults to 1 if omitted.
+* **`d[sides]` (Required):** The number of sides on each die.
+* **`[modifier]` (Optional):** A modifier to add or subtract from the total roll. Use `+` or `-` followed by a number.
+* **`[explode]` (Optional):** If `e` is present, dice that roll their maximum value will "explode" and be rolled again, adding to the total.
+* **`[keep]` (Optional):** If `k` is followed by a number, only the highest `[number]` dice are kept, and the rest are discarded.
+* **`[keepLow]` (Optional):** If `kl` is followed by a number, only the lowest `[number]` dice are kept, and the rest are discarded.
+
+### Examples
+
+* `{d20}`: Rolls a single 20-sided die.
+* `{2d6}`: Rolls two 6-sided dice and sums the results.
+* `{3d8+2}`: Rolls three 8-sided dice, sums the results, and adds 2.
+* `{4d6e}`: Rolls four 6-sided dice, exploding any 6s, and sums the results.
+* `{5d10k3}`: Rolls five 10-sided dice, keeps the three highest, and sums them.
+* `{5d10kl3}`: Rolls five 10-sided dice, keeps the three lowest, and sums them.
+
+### Usage
+
+To use this syntax, simply enclose your dice roll command within curly braces `{}` inside a list item, or even in your text (see [On-the-Fly Combination](#on-the-fly-combination)). The plugin will automatically replace the dice roll command with the result of the roll.
+
+### Error Handling
+
+If an invalid dice roll syntax is provided, the plugin will keep the original text.
+
+**Notes:** 
+* The dice rolls are performed using a pseudo-random number generator.
+* The plugin supports both uppercase and lowercase letters in the dice roll syntax.
+
 ## Picking Items
 
 To pick items, you can use the ribbon button or the "Insert random item from list" command in the command palette[^1].
