@@ -1142,7 +1142,7 @@ class LIRPSettingTab extends PluginSettingTab {
                 })
             );
 
-            containerEl.createEl("h2", { text: "Specific values" });
+            new Setting(containerEl).setName('Specific values').setHeading();
     
             new Setting(containerEl)
                 .setName("Null value")
@@ -1180,7 +1180,7 @@ class LIRPSettingTab extends PluginSettingTab {
                 })
             );
 
-        containerEl.createEl('h2', { text: 'Behavior' });
+        new Setting(containerEl).setName('Behavior').setHeading();
 
         new Setting(containerEl)
             .setName('Show note selector')
