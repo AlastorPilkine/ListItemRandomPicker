@@ -253,6 +253,8 @@ The plugin has three types of settings: plugin settings, list settings, and note
 
 These settings affect the overall behavior of the plugin.
 
+![settings](./docs/settings.png)
+
 * **Path :** The path of a note or folder. Example: "Folder/Note" or "Folder"
 
 **Specific Values:**
